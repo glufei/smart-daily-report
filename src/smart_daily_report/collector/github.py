@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+from datetime import timezone
+from email.utils import parsedate_to_datetime
+from typing import Sequence
+
+import httpx
+
+from ..shared.http import request_with_retry
+from ..shared.models import CollectResult, CollectionWindow, CommitRecord
+
+
+def collect_commits(client: httpx.Client, repositories: Sequence[str], window: CollectionWindow,
+                    api_base_url: str = "https://api.github.com", token: str | None = None,
+                    sleep=None) -> CollectResult[CommitRecord]:
+    records: list[CommitRecord] = []
+    total_attempts = 1
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    for repository in repositories:
+        page_url = f"{api_base_url.rstrip('/')}/repos/{repository}/commits"
+        params = {"since": window.start.isoformat(), "until": window.end.isoformat(), "per_page": 100}
+        while page_url:
+            args = {"headers": headers, "params": params, "timeout": 10}
+            response, attempts, error = request_with_retry(client, "GET", page_url, **args) if sleep is None else request_with_retry(client, "GET", page_url, sleep=sleep, **args)
+            total_attempts += attempts - 1
+            if response is not None and response.status_code == 403 and response.headers.get("X-RateLimit-Remaining") == "0":
+                reset = response.headers.get("X-RateLimit-Reset")
+                if reset:
+                    try:
+                        delay = max(0, min(float(reset) - __import__("time").time(), 30))
+                        (sleep or __import__("time").sleep)(delay)
+                        response, attempts, error = request_with_retry(client, "GET", page_url, **args) if sleep is None else request_with_retry(client, "GET", page_url, sleep=sleep, **args)
+                        total_attempts += attempts
+                    except ValueError:
+                        pass
+            if error or response is None or response.is_error:
+                code = error or f"http_{response.status_code if response else 'unknown'}"
+                return CollectResult("github_commits", "failure", error_code=code, message="GitHub collection failed", attempts=total_attempts)
+            try:
+                items = response.json()
+                if not isinstance(items, list):
+                    raise ValueError("unexpected payload")
+                for item in items:
+                    commit = item.get("commit") or {}
+                    author = commit.get("author") or {}
+                    stats = item.get("stats") or {}
+                    changed_files = item.get("files") or []
+                    if "stats" not in item:
+                        details_url = item.get("url") or f"{api_base_url.rstrip('/')}/repos/{repository}/commits/{item.get('sha', '')}"
+                        detail_args = {"headers": headers, "timeout": 10}
+                        detail_response, detail_attempts, detail_error = request_with_retry(client, "GET", details_url, **detail_args) if sleep is None else request_with_retry(client, "GET", details_url, sleep=sleep, **detail_args)
+                        total_attempts += detail_attempts
+                        if detail_error or detail_response is None:
+                            code = detail_error or "details_unavailable"
+                            return CollectResult("github_commits", "failure", error_code=code, message="GitHub commit details failed", attempts=total_attempts)
+                        details = detail_response.json()
+                        stats = details.get("stats") or {}
+                        changed_files = details.get("files") or []
+                    api_author = item.get("author") or {}
+                    committed = author.get("date")
+                    records.append(CommitRecord(
+                        record_id=str(item["sha"]), repository=repository,
+                        author_login=api_author.get("login"), author_name=author.get("name"),
+                        message=str(commit.get("message", "")).splitlines()[0],
+                        committed_at=__import__("datetime").datetime.fromisoformat(committed.replace("Z", "+00:00")),
+                        url=str(item.get("html_url", "")),
+                        additions=int(stats.get("additions", 0)), deletions=int(stats.get("deletions", 0)),
+                        files_changed=len(changed_files),
+                    ))
+            except (KeyError, TypeError, ValueError, AttributeError):
+                return CollectResult("github_commits", "failure", error_code="invalid_payload", message="GitHub response could not be parsed", attempts=total_attempts)
+            page_url = response.links.get("next", {}).get("url")
+            params = None
+    return CollectResult("github_commits", "success", records, attempts=total_attempts)

@@ -1,0 +1,1 @@
+"""Deterministic daily report generation."""
