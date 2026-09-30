@@ -1,0 +1,190 @@
+[
+  {
+    "version": "initial",
+    "width": 375,
+    "height": 812,
+    "state": "查询前",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 375,
+    "height": 812,
+    "state": "加载中",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 375,
+    "height": 812,
+    "state": "正常日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 375,
+    "height": 812,
+    "state": "尚无日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 375,
+    "height": 812,
+    "state": "查询失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 375,
+    "height": 812,
+    "state": "任务来源失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 375,
+    "keyboardQuery": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "height": 900,
+    "state": "查询前",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "height": 900,
+    "state": "加载中",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "height": 900,
+    "state": "正常日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "height": 900,
+    "state": "尚无日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "height": 900,
+    "state": "查询失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "height": 900,
+    "state": "任务来源失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "initial",
+    "width": 1440,
+    "keyboardQuery": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "height": 812,
+    "state": "查询前",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "height": 812,
+    "state": "加载中",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "height": 812,
+    "state": "正常日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "height": 812,
+    "state": "尚无日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "height": 812,
+    "state": "查询失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "height": 812,
+    "state": "任务来源失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 375,
+    "keyboardQuery": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "height": 900,
+    "state": "查询前",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "height": 900,
+    "state": "加载中",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "height": 900,
+    "state": "正常日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "height": 900,
+    "state": "尚无日报",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "height": 900,
+    "state": "查询失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "height": 900,
+    "state": "任务来源失败",
+    "noHorizontalOverflow": true
+  },
+  {
+    "version": "iteration",
+    "width": 1440,
+    "keyboardQuery": true
+  }
+]

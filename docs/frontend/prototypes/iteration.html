@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智能日报 · 只读查看</title>
+  <style>
+    /* ─── tokens ───────────────────────────────────────────────────────── */
+    :root {
+      --bg: #f2f4f8;        /* 浅灰背景 */
+      --surface: #ffffff;   /* 白色内容区 */
+      --fg: #1c2633;        /* 深色正文 */
+      --muted: #5b6572;     /* 次级文字 */
+      --border: #e3e7ee;    /* 分隔线 */
+      --accent: #1d3a5f;    /* 深蓝 */
+      --danger: #b3261e;    /* 错误状态 */
+      --warn: #9a5b00;      /* 警告状态 */
+
+      --accent-soft:   color-mix(in oklch, var(--accent) 11%, transparent);
+      --accent-strong: color-mix(in oklch, var(--accent) 82%, black);
+      --danger-soft:   color-mix(in oklch, var(--danger) 10%, transparent);
+      --warn-soft:     color-mix(in oklch, #b45309 12%, transparent);
+      --warn-border:   color-mix(in oklch, #b45309 34%, transparent);
+      --fg-soft:       color-mix(in oklch, var(--fg) 5%, transparent);
+
+      --font-display: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', 'STSong', 'SimSun', Georgia, serif;
+      --font-body:    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+      --font-mono:    ui-monospace, 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, Menlo, monospace;
+
+      --fs-body: 16px;
+      --fs-meta: 13px;
+
+      --gap-xs: 8px;
+      --gap-sm: 12px;
+      --gap-md: 20px;
+      --gap-lg: 28px;
+      --gap-xl: 48px;
+      --container: 920px;
+      --gutter: 20px;
+
+      --radius: 8px;
+      --radius-lg: 14px;
+    }
+
+    /* ─── reset & base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      line-height: 1.6;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    svg { display: block; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+    p { text-wrap: pretty; }
+    h1, h2, h3, h4 { text-wrap: balance; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .container {
+      max-width: var(--container);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+    .section { padding-block: var(--gap-lg); }
+
+    /* ─── type ─────────────────────────────────────────────────────────── */
+    h1, .h1 { font-family: var(--font-display); font-weight: 600; margin: 0; }
+    h2, .h2 { font-family: var(--font-display); font-weight: 600; margin: 0; line-height: 1.2; }
+    h3, .h3 { font-weight: 600; margin: 0; line-height: 1.35; }
+    h4, .h4 { font-weight: 600; margin: 0; line-height: 1.4; }
+    .meta { font-size: var(--fs-meta); color: var(--muted); }
+    .num  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    /* ─── top nav ──────────────────────────────────────────────────────── */
+    .topnav {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .topnav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--gap-md);
+      padding-block: 16px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand .logo {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+    }
+    .topnav-sub { font-size: 13px; color: var(--muted); }
+
+    .tag {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* ─── buttons ──────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 20px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 0;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+    .btn-accent-outline {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid color-mix(in oklch, var(--accent) 45%, transparent);
+    }
+    .btn-accent-outline:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+    /* ─── form field ───────────────────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 14px; font-weight: 500; color: var(--fg); }
+    .input {
+      width: 100%;
+      height: 48px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: 15px;
+    }
+    .input:hover { border-color: color-mix(in oklch, var(--accent) 40%, var(--border)); }
+    .input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+    .input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
+
+    /* ─── query bar ────────────────────────────────────────────────────── */
+    .query-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    .query-bar { display: flex; align-items: flex-end; gap: var(--gap-sm); flex-wrap: wrap; }
+    .query-field { flex: 1 1 260px; min-width: 0; }
+    .query-btn { height: 48px; padding-inline: 26px; }
+    .query-hint { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+    .query-hint .num { font-size: 12px; }
+
+    @media (max-width: 600px) {
+      .query-bar { flex-direction: column; align-items: stretch; }
+      .query-btn { width: 100%; }
+    }
+
+    /* ─── demo panel ───────────────────────────────────────────────────── */
+    .demo-panel {
+      border: 1px dashed color-mix(in oklch, var(--muted) 45%, transparent);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      background: color-mix(in oklch, var(--surface) 55%, var(--bg));
+    }
+    .demo-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .demo-label { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+    .demo-head .tag { padding: 2px 8px; font-size: 11px; }
+    .demo-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 7px 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--fg);
+      font-size: 13px;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .chip:hover { border-color: var(--accent); }
+    .chip-active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+    .demo-note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+
+    /* ─── result area ──────────────────────────────────────────────────── */
+    .result-section { padding-block: var(--gap-md) var(--gap-xl); }
+
+    .state-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 56px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 14px;
+    }
+    .state-card .state-icon { width: 40px; height: 40px; color: var(--muted); }
+    .state-card h2 { font-size: 22px; }
+    .state-card p { margin: 0; color: var(--muted); max-width: 42ch; }
+    .state-card-error .state-icon { color: var(--danger); }
+    .state-card-error h2 { color: var(--danger); }
+
+    .spinner {
+      width: 30px; height: 30px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin: 0; color: var(--muted); }
+
+    /* ─── report ───────────────────────────────────────────────────────── */
+    .report { display: flex; flex-direction: column; gap: var(--gap-md); }
+
+    .banner {
+      display: flex; gap: 12px; align-items: flex-start;
+      border: 1px solid var(--warn-border);
+      background: var(--warn-soft);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .banner .state-icon { width: 22px; height: 22px; color: var(--warn); flex-shrink: 0; margin-top: 1px; }
+    .banner-title { color: var(--warn); font-size: 14px; font-weight: 600; }
+    .banner-text { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+    .report-head {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+    .report-team { font-size: 24px; }
+    .report-meta { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 14px 0 0; }
+    .meta-item { display: flex; align-items: baseline; gap: 8px; }
+    .meta-item dt { font-size: 12px; color: var(--muted); }
+    .meta-item dd { margin: 0; font-size: 13px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .members { display: flex; flex-direction: column; gap: var(--gap-md); }
+    .member {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+    .member-name { font-size: 18px; margin-bottom: 18px; }
+    .blocks { display: flex; flex-direction: column; }
+    .block + .block { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 18px; }
+    .block-label { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; margin-bottom: 10px; }
+
+    .records { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .records li { font-size: 16px; line-height: 1.6; overflow-wrap: break-word; word-break: break-word; }
+    .record-empty { color: var(--muted); }
+    .record-failed {
+      display: flex; align-items: flex-start; gap: 8px;
+      color: var(--danger);
+      background: var(--danger-soft);
+      border: 1px solid color-mix(in oklch, var(--danger) 30%, transparent);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-weight: 500;
+    }
+    .inline-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 3px; }
+
+    .code {
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+      background: var(--fg-soft);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 1px 6px;
+      overflow-wrap: anywhere;
+    }
+
+    /* ─── footer ───────────────────────────────────────────────────────── */
+    .pagefoot { padding-block: 24px; border-top: 1px solid var(--border); }
+    .pagefoot .container { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-md); flex-wrap: wrap; }
+    .pagefoot .footer-title { font-size: 13px; font-weight: 600; }
+    .pagefoot .meta { font-size: 12px; }
+
+    @media (max-width: 480px) {
+      .topnav-sub { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topnav" data-od-id="topnav">
+    <div class="container topnav-inner">
+      <div class="brand">
+        <h1 class="logo">智能日报</h1>
+        <span class="tag">只读</span>
+      </div>
+      <span class="topnav-sub">研发团队 · 日报查看</span>
+    </div>
+  </header>
+
+  <main id="content">
+    <!-- 查询控件 -->
+    <section class="section" data-od-id="query" style="padding-bottom: var(--gap-md);">
+      <div class="container">
+        <form class="query-card" id="query-form" novalidate>
+          <div class="query-bar">
+            <div class="field query-field">
+              <label for="date-input">报告日期</label>
+              <input type="date" id="date-input" class="input" data-od-id="date-input" value="2026-09-25" />
+            </div>
+            <button type="submit" class="btn btn-primary query-btn" id="query-btn" data-od-id="query-button">查看日报</button>
+          </div>
+          <p class="query-hint" id="query-hint">演示日期：<span class="num">2026-09-25</span> 正常日报 · <span class="num">2026-09-26</span> 任务来源失败 · <span class="num">2026-09-27</span> 查询失败 · 其他日期 尚无日报</p>
+        </form>
+      </div>
+    </section>
+
+    <!-- 演示状态切换 -->
+    <section class="section" data-od-id="demo-states" style="padding-top: var(--gap-sm); padding-bottom: var(--gap-sm);">
+      <div class="container">
+        <div class="demo-panel">
+          <div class="demo-head">
+            <span class="demo-label">演示状态</span>
+            <span class="tag">仅原型演示</span>
+          </div>
+          <div class="demo-chips" role="group" aria-label="演示状态切换">
+            <button type="button" class="chip" data-state="before" data-od-id="demo-state-before">查询前</button>
+            <button type="button" class="chip" data-state="loading" data-od-id="demo-state-loading">加载中</button>
+            <button type="button" class="chip" data-state="report" data-od-id="demo-state-report">正常日报</button>
+            <button type="button" class="chip" data-state="empty" data-od-id="demo-state-empty">尚无日报</button>
+            <button type="button" class="chip" data-state="error" data-od-id="demo-state-error">查询失败</button>
+            <button type="button" class="chip" data-state="taskfail" data-od-id="demo-state-taskfail">任务来源失败</button>
+          </div>
+          <p class="demo-note">以上状态为设计期虚构演示，上线后由真实日报 API 返回。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 结果区 -->
+    <section class="section result-section" data-od-id="result" aria-live="polite">
+      <div class="container">
+        <div id="view-root"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pagefoot" data-od-id="footer">
+    <div class="container">
+      <span class="footer-title">智能日报 · 只读查看</span>
+      <span class="meta">设计期原型：团队、成员与记录均为虚构示例，上线后查询真实日报 API。</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var TEAM = {
+        name: '示例研发团队',
+        date: '2026-09-25',
+        generatedAt: '2026-09-25 18:00（UTC+08:00）',
+        members: [
+          {
+            name: '示例成员甲',
+            commits: ['example/report：修正日期选择交互'],
+            tasks: ['完成页面契约评审（已完成）'],
+            messages: ['日报：已完成只读页面原型']
+          },
+          {
+            name: '示例成员乙',
+            commits: [],
+            tasks: [],
+            messages: []
+          }
+        ]
+      };
+
+      var root = document.getElementById('view-root');
+      var form = document.getElementById('query-form');
+      var dateInput = document.getElementById('date-input');
+      var queryBtn = document.getElementById('query-btn');
+
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function commitHtml(text) {
+        var idx = text.indexOf('：');
+        if (idx > 0 && text.slice(0, idx).indexOf('/') >= 0) {
+          return '<span class="code">' + esc(text.slice(0, idx)) + '</span>：' + esc(text.slice(idx + 1));
+        }
+        return esc(text);
+      }
+
+      function iconCalendar() {
+        return '<svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
+      }
+      function iconCalendarOff() {
+        return '<svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/><path d="m9.5 14.5 5 5M14.5 14.5l-5 5"/></svg>';
+      }
+      function iconAlert() {
+        return '<svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 16h.01"/></svg>';
+      }
+      function iconWarn() {
+        return '<svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 16h.01"/></svg>';
+      }
+      function iconWarnSmall() {
+        return '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 16h.01"/></svg>';
+      }
+
+      function commitList(items) {
+        if (!items.length) return '<ul class="records"><li class="record-empty">今日无记录</li></ul>';
+        return '<ul class="records">' + items.map(function (t) { return '<li>' + commitHtml(t) + '</li>'; }).join('') + '</ul>';
+      }
+      function recordList(items) {
+        if (!items.length) return '<ul class="records"><li class="record-empty">今日无记录</li></ul>';
+        return '<ul class="records">' + items.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>';
+      }
+      function taskList(items, taskFail) {
+        if (taskFail) return '<ul class="records"><li class="record-failed">' + iconWarnSmall() + '<span>数据获取失败</span></li></ul>';
+        if (!items.length) return '<ul class="records"><li class="record-empty">今日无记录</li></ul>';
+        return '<ul class="records">' + items.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>';
+      }
+
+      function memberCard(m, i, taskFail) {
+        return '' +
+          '<article class="member" data-od-id="member-' + (i + 1) + '">' +
+            '<h3 class="member-name">' + esc(m.name) + '</h3>' +
+            '<div class="blocks">' +
+              '<section class="block"><h4 class="block-label">代码提交</h4>' + commitList(m.commits) + '</section>' +
+              '<section class="block"><h4 class="block-label">任务进展</h4>' + taskList(m.tasks, taskFail) + '</section>' +
+              '<section class="block"><h4 class="block-label">协作沟通</h4>' + recordList(m.messages) + '</section>' +
+            '</div>' +
+          '</article>';
+      }
+
+      function warnBanner() {
+        return '' +
+          '<div class="banner" role="alert" data-od-id="task-source-banner">' +
+            iconWarn() +
+            '<div class="banner-body">' +
+              '<strong class="banner-title">任务数据源获取失败</strong>' +
+              '<p class="banner-text">日报正文已加载，但任务进展数据源暂不可用，各成员的任务板块显示为“数据获取失败”。</p>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function reportView(taskFail) {
+        var members = TEAM.members.map(function (m, i) { return memberCard(m, i, taskFail); }).join('');
+        return '' +
+          '<div class="report" data-od-id="report">' +
+            (taskFail ? warnBanner() : '') +
+            '<header class="report-head">' +
+              '<h2 class="report-team">' + esc(TEAM.name) + '</h2>' +
+              '<dl class="report-meta">' +
+                '<div class="meta-item"><dt>报告日期</dt><dd>' + esc(TEAM.date) + '</dd></div>' +
+                '<div class="meta-item"><dt>生成时间</dt><dd>' + esc(TEAM.generatedAt) + '</dd></div>' +
+              '</dl>' +
+            '</header>' +
+            '<div class="members">' + members + '</div>' +
+          '</div>';
+      }
+
+      function beforeView() {
+        return '' +
+          '<div class="state-card" data-od-id="state-before">' +
+            iconCalendar() +
+            '<h2>选择日期查看日报</h2>' +
+            '<p>请选择报告日期并点击“查看日报”，加载当日的团队日报。</p>' +
+          '</div>';
+      }
+      function loadingView() {
+        return '' +
+          '<div class="state-card" role="status" data-od-id="state-loading">' +
+            '<div class="spinner" aria-hidden="true"></div>' +
+            '<p class="loading-text">正在加载日报…</p>' +
+          '</div>';
+      }
+      function emptyView(date) {
+        return '' +
+          '<div class="state-card" role="status" data-od-id="state-empty">' +
+            iconCalendarOff() +
+            '<h2>该日期尚无日报</h2>' +
+            '<p>所选日期 <span class="num">' + esc(date || TEAM.date) + '</span> 暂无日报记录，请换一个日期查看。</p>' +
+          '</div>';
+      }
+      function errorView() {
+        return '' +
+          '<div class="state-card state-card-error" role="alert" data-od-id="state-error">' +
+            iconAlert() +
+            '<h2>查询失败</h2>' +
+            '<p>无法连接到日报服务，请检查网络后重试。</p>' +
+            '<button type="button" class="btn btn-accent-outline" id="retry-query" data-od-id="retry-query">重新查询</button>' +
+          '</div>';
+      }
+
+      function view(state) {
+        var html = '';
+        if (state === 'before') html = beforeView();
+        else if (state === 'loading') html = loadingView();
+        else if (state === 'report') html = reportView(false);
+        else if (state === 'taskfail') html = reportView(true);
+        else if (state === 'empty') html = emptyView(currentDate);
+        else if (state === 'error') html = errorView();
+        root.innerHTML = html;
+        if (state === 'error') {
+          document.getElementById('retry-query').addEventListener('click', function () {
+            runQuery(dateInput.value || currentDate);
+          });
+        }
+      }
+
+      function outcomeFor(date) {
+        if (date === '2026-09-25') return 'report';
+        if (date === '2026-09-26') return 'taskfail';
+        if (date === '2026-09-27') return 'error';
+        return 'empty';
+      }
+
+      function render(state) {
+        currentState = state;
+        view(state);
+        var chips = document.querySelectorAll('.chip');
+        for (var i = 0; i < chips.length; i++) {
+          chips[i].classList.toggle('chip-active', chips[i].getAttribute('data-state') === state);
+        }
+      }
+
+      function runQuery(date) {
+        currentDate = date;
+        render('loading');
+        queryBtn.disabled = true;
+        queryBtn.setAttribute('aria-busy', 'true');
+        setTimeout(function () {
+          queryBtn.disabled = false;
+          queryBtn.removeAttribute('aria-busy');
+          render(outcomeFor(date));
+        }, 900);
+      }
+
+      var currentState = 'before';
+      var currentDate = dateInput.value || '2026-09-25';
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var d = dateInput.value;
+        if (!d) {
+          dateInput.focus();
+          return;
+        }
+        runQuery(d);
+      });
+
+      dateInput.addEventListener('input', function () {
+        currentDate = dateInput.value;
+      });
+
+      var chips = document.querySelectorAll('.chip');
+      for (var i = 0; i < chips.length; i++) {
+        (function (chip) {
+          chip.addEventListener('click', function () {
+            var s = chip.getAttribute('data-state');
+            if (s === 'empty') { currentDate = dateInput.value || currentDate; }
+            render(s);
+          });
+        })(chips[i]);
+      }
+
+      render('before');
+    })();
+  </script>
+</body>
+</html>

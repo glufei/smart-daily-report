@@ -13,3 +13,9 @@ config.yaml
 build/
 *.egg-info/
 *.sqlite3
+.tools/
+.runtime/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/

@@ -1,0 +1,3 @@
+# Preserve the byte-identical OpenDesign exports and their documented SHA256 hashes.
+docs/frontend/prototypes/initial.html -text
+docs/frontend/prototypes/iteration.html -text

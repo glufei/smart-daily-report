@@ -46,7 +46,7 @@ def write_report(db_path: Path, report: DailyReport) -> None:
 def get_report(db_path: Path, report_date: date) -> DailyReport | None:
     if not db_path.exists():
         return None
-    with sqlite3.connect(db_path) as connection:
+    with sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute("SELECT * FROM daily_reports WHERE report_date = ?", (report_date.isoformat(),)).fetchone()
     if not row:

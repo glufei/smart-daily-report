@@ -2,6 +2,8 @@
 
 本文件是 `specs/design.md` 的规范性子文档。所有签名均为逻辑契约；实现可使用同步 httpx 调用，或在不改变语义时使用异步实现。
 
+v1.1 已确认的浏览器接口单独定义于 [`http-api.md`](http-api.md)。下列接口是内部 Python 能力，不是已经存在的 HTTP API；新增 Web 适配层不改变 Collector/Generator/Notifier 的调用语义。
+
 ```python
 @dataclass
 class CollectionWindow:
@@ -82,6 +84,8 @@ check_dependencies(config: RunConfig, client: httpx.Client) -> list[HealthCheckR
 ```
 
 映射冲突使配置加载失败；未映射记录不并入任一成员，生成不含原文的诊断计数。GitHub 提交优先按 `author_login` 匹配；仅在该字段缺失时，按显式配置的 `github_author_names` 匹配。提交作者名可由提交者自行填写，配置前须确认身份；不同成员不得配置相同作者名。敏感过滤必须先于映射后持久化/输出执行。
+
+v1.1 已确认补充：`get_report()` 使用只读连接，不创建数据库/表；数据库不存在或指定日期无行返回 `None`，已有库缺表/损坏/读取失败或内容无法反序列化时报告读取错误，不用 `None` 隐藏失败。HTTP 字段及来源状态校验由 Web DTO 适配层负责，不改变 Shared 对既有有效模型的往返读取。`write_report()` 的写入/幂等语义保持，查询不调用写入能力。
 
 ## Generator
 

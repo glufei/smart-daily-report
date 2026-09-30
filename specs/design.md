@@ -1,14 +1,14 @@
 # 智能日报生成器架构设计（Design）
 
-- 版本：v1.0
-- 状态：已确认并实施完成
+- 版本：v1.1（2026-09-30）
+- 状态：用户已确认 v1.1 规范与 ADR；实现与验收完成
 - 上游：[`proposal.md`](proposal.md)
-- 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)
+- 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 已确认）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
 
 ## 1. 架构概览
 
-采用单进程管道式架构，执行方向为：配置/工作日判断 → 并发或独立数据采集 → 身份归一和敏感内容过滤 → 按成员聚合 → Markdown/HTML 生成 → SQLite 历史保存 → 邮件与飞书推送。各步骤通过 `specs/contracts/` 定义的数据模型交接。
+v1.0 生成链路采用单进程管道式架构，执行方向为：配置/工作日判断 → 并发或独立数据采集 → 身份归一和敏感内容过滤 → 按成员聚合 → Markdown/HTML 生成 → SQLite 历史保存 → 邮件与飞书推送。各步骤通过 `specs/contracts/` 定义的数据模型交接。v1.1 增加独立的只读查询链路，具体范围以 `proposal.md` 的已确认范围为准。
 
 ```text
 GitHub ─────┐
@@ -29,7 +29,33 @@ GitHub ─────┐
 
 `generator/formatter.py` 负责校验数据状态并组装 DailyReport；`generator/template.py` 负责 Markdown/HTML 模板渲染与外部链接安全处理。
 
+### 1.2 v1.1 前后端分离（已确认）
+
+```text
+外部定时任务 → 既有 Python CLI → Collector/Generator → SQLite → Notifier
+                                                       ↑ 只读
+浏览器 → frontend/（React + TypeScript + Vite）→ HTTP API（FastAPI）
+
+OpenDesign → 虚构数据原型/设计迭代 → 经审阅的前端实现（设计期工具）
+```
+
+- `frontend/`：日期选择、请求状态和结构化日报展示。使用 React 状态与原生 fetch，不增加全局状态框架、SSR 或第二套业务模型。加载、400/404/500/网络错误由确定性代码处理；仅用户重新查询，不自动重试。
+- `src/smart_daily_report/web/`：独立 FastAPI 应用工厂、显式响应 DTO、HTTP 错误映射和本机启动入口；只调用 Shared 的读取能力，不调用生成编排器。FastAPI/运行服务器放在 `web` 可选依赖组，CLI 不导入 Web 模块。
+- `shared/storage.py`：复用 `get_report()` 的反序列化和既有模型，增加只读读取约束（SQLite `mode=ro`）；`write_report()` 和存储 schema 保持。API 不自动创建数据库/表；不存在文件或已有空表为“无日报”，已有库结构异常/损坏/不可读为安全存储错误。
+- OpenDesign 为设计和代码交接工具；其桌面程序、daemon、模型调用和自身 `/api/*` 不属于日报系统运行架构。前端不会在用户查看日报时调用模型。
+- 查询接口只接收启动时指定的数据库路径，不复用要求 SMTP/飞书凭证的整份 `load_config()`；浏览器不能指定文件路径，Web 启动不需要源平台或推送凭证。
+
+本机 API 默认 `127.0.0.1:8000`，前端开发/构建预览默认 `127.0.0.1:5173` / `127.0.0.1:4173`，均限制 loopback。API 只允许明确的本机前端 Origin，并校验本机 Host；CORS 不使用 `*`，本期无 Cookie 会话。未允许的 Origin 请求在服务端拒绝，本机无 Origin 请求允许用于契约测试；响应 `Cache-Control: no-store`。公网/局域网发布及认证设计不在本期范围。
+
+### 1.3 现有后端接口适配评估
+
+2026-09-30 检查 `pyproject.toml`、`main.py`、`shared/models.py`、`shared/storage.py` 及现有测试：当前只有 CLI 与内部 Python 函数，没有 HTTP 路由、Web 框架或前端项目。`get_report(db_path, report_date)` 和 `DailyReport` 足以提供指定日期数据，但不能直接被浏览器调用；不能把 GitHub/飞书上游 API 或 OpenDesign 自身接口当作日报后端接口。
+
+新增唯一业务路由 `GET /api/v1/reports/{report_date}`。URL 日期、JSON DTO、状态码和错误格式见 [`contracts/http-api.md`](contracts/http-api.md)。直接复用 SQLite 的结构化数据，不解析 HTML/Markdown，也不在前端重做身份归一/敏感过滤。历史未记录投递状态和失败运行历史，因此本期不展示“已投递”、最近运行失败原因等无法证明的状态。
+
 ## 2. 技术决策与 ADR
+
+ADR-004（v1.1 已确认）：见 [`adrs/004-opendesign-frontend.md`](adrs/004-opendesign-frontend.md)，记录 OpenDesign 同名项目调查、候选身份、React/Vue 取舍、Vite 与 FastAPI 适配层。用户已采纳推荐候选与技术方案；实际 OpenDesign 0.24.1 已验证，运行依赖在任务执行时核验并锁定。
 
 ADR-003：见 [`adrs/003-collect-result.md`](adrs/003-collect-result.md)，记录第 7 章暴露的采集返回值契约修正。
 
@@ -56,6 +82,10 @@ ADR-001 与 ADR-002 的独立记录分别位于 [`adrs/001-http-client.md`](adrs
 ## 3. 数据模型与接口
 
 字段类型、可空性、身份键、采集结果状态及公开函数签名以 `specs/contracts/data-models.md` 与 `specs/contracts/interfaces.md` 为准。接口必须能区分 `success + []` 和 `failure`。任何实现不得用空列表代表失败。
+
+v1.1 HTTP 响应是 `DailyReport` 的显式白名单投影，详见 `contracts/http-api.md`；内部模型不删除原有字段，HTTP 不返回全部 dataclass 属性。顶层来源状态须完整；未知状态或损坏数据在 Web DTO 适配时返回错误，不得默认补成 `success`，不在 Shared 读取方法中新增展示层校验。
+
+**状态来源冲突的处理**：内部 `MemberReport.source_status` 与 `DailyReport.source_status` 重复，而现有 `render_markdown()` / `render_html()` 实际使用顶层状态。v1.1 选择沿用模板约定：HTTP 只输出顶层状态，前端所有成员板块据此展示，不输出/合并成员状态。内部重复字段保留兼容；其移除或校验统一列为待清理事项，不包含在本次迭代。
 
 ## 4. 配置与身份映射
 
@@ -107,3 +137,10 @@ ADR-001 与 ADR-002 的独立记录分别位于 [`adrs/001-http-client.md`](adrs
 - 单元测试：身份映射冲突、敏感词过滤、工作日判断、格式生成、存储和配置校验。
 - 集成测试：注入 Mock 数据和 Mock 推送端，覆盖全成功、单源失败、全源失败、空数据、非工作日、单渠道推送失败。
 - 每个任务的验收项映射到测试；测试以可观察意图断言行为，包括失败不能冒充空数据、敏感内容不能泄漏、部分故障不能阻断其他来源。
+
+### 8.1 v1.1 验证增量
+
+- API 使用临时 SQLite 与 FastAPI TestClient/httpx 验证结构化 DTO、400/404/500、严格日期、只读和无采集/生成/推送副作用；用禁用的调用替身证明查询不发通知。覆盖数据库缺失、空表、缺表、损坏、读取异常和不可信文本/链接。
+- 前端使用 Vitest + Testing Library 验证状态与文案，Playwright 验证真实查询链路、键盘操作、两种视口和日期切换竞态。Mock 的 JSON 与 HTTP 契约一致，不以 Mock 页面替代最终联调。
+- Task 14 运行全部 Python 测试（业务覆盖率仍 ≥90%）、前端类型检查/构建/测试。验收截图、OpenDesign 来源和前后对照记录在 `docs/frontend/`；设计输入只用虚构数据。
+- 原 Task 1–10 的已完成标记与历史验证记录保留；v1.1 新任务在实现和验收前全部保持未完成。

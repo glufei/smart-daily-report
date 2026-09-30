@@ -2,7 +2,7 @@
 
 按 **SDD（Specification-Driven Development，规范驱动开发）** 方法构建的团队日报工具。它从 GitHub 提交、飞书任务和飞书群消息收集工作记录，按成员归属生成「代码提交 / 任务进展 / 协作沟通」三段式日报，保存本地历史，并通过 HTML 邮件和飞书群机器人发送。
 
-项目适合小团队在工作日由外部调度器触发；当前实现是命令行程序，不提供常驻服务、Web 界面或 AI 自动撰写摘要。
+项目适合小团队在工作日由外部调度器触发生成 CLI；v1.1 已完成 OpenDesign UI 设计迭代、React 浏览器页面和本机只读 HTTP 接口，可按日期查看已保存日报及来源状态。日报不使用 AI 自动撰写摘要。[Web 运行说明](docs/frontend/local-run.md)、[设计证据](docs/frontend/opendesign-evidence.md)、[验收记录](docs/frontend/acceptance.md)。
 
 ## ✨ 核心工程亮点：规范先于代码
 
@@ -13,10 +13,12 @@
 | 需求定义 | [`specs/proposal.md`](specs/proposal.md) | 明确目标、范围、三段式日报、异常边界和量化验收标准。 |
 | 架构设计 | [`specs/design.md`](specs/design.md)、[`specs/adrs/`](specs/adrs/) | 定义管道架构、模块职责、HTTP/存储决策和非功能性约束。 |
 | 接口契约 | [`specs/contracts/`](specs/contracts/) | 固定数据模型、模块签名及「采集失败 ≠ 成功但无记录」的语义。 |
-| 任务拆解 | [`specs/tasks.md`](specs/tasks.md) | 将工作拆成 Task 1–10 的依赖 DAG，每项对应可验证交付物。 |
-| 实现与验证 | [`src/`](src/)、[`tests/`](tests/) | 按契约实现模块，用 Mock 单元测试和集成测试验证业务意图。 |
+| 任务拆解 | [`specs/tasks.md`](specs/tasks.md) | 将工作拆成 Task 1–14 的依赖 DAG，每项对应可验证交付物；v1.1 在用户确认规范后执行。 |
+| 实现与验证 | [`src/`](src/)、[`tests/`](tests/)、[`frontend/`](frontend/) | 按契约实现模块，用后端回归、前端意图测试及真实 HTTP 浏览器测试验收。 |
 
-**可复核的质量证据：**`pyproject.toml` 设置了总覆盖率 **≥90%** 的自动化门槛，并开启分支覆盖率统计。2026-09-26 最近一次记录为 **64 项测试通过、总覆盖率 91.00%**；因此本项目不宣称 100% 代码覆盖率。GitHub、飞书采集和邮件、飞书推送还完成过一次真实端到端运行，用户确认两个渠道均收到日报，总耗时 4.875 秒。该次飞书任务与消息为零条；真实的非空任务和多页任务响应仍待验证，相关规则已用 Mock 测试覆盖。
+**v1.1 质量证据（2026-09-30）：**Task 11–14 已验收，Python **98 项通过、总覆盖率 92.02%**，Vitest **15 项通过**，Playwright **14 项通过**；两版 OpenDesign 原型有 **28 项状态/视口/键盘检查**。`npm ci`、类型检查与生产构建通过。`pyproject.toml` 保持总覆盖率 **≥90%** 的门槛并统计分支覆盖率。命令、截图、首次失败及验证边界见 [验收记录](docs/frontend/acceptance.md)。
+
+**v1.0 历史证据：**2026-09-26 记录为 64 项测试通过、总覆盖率 91.00%；真实端到端运行曾完成 GitHub/飞书采集及两种推送，用户确认收到，总耗时 4.875 秒。非空任务和多页任务响应仍待真实数据复核。v1.1 验收使用虚构数据和临时库，没有连接真实 GitHub/飞书/SMTP 或发送通知。
 
 ## 架构概览
 
@@ -26,12 +28,18 @@ GitHub 提交 ────┐
 飞书群消息 ─────┘      采集/解析    映射/过滤     Markdown + HTML
                                                    ├─> SMTP：HTML 邮件
                                                    └─> 飞书机器人：Markdown 卡片
+
+浏览器 React 页面 ──GET 指定日期──> FastAPI 只读适配层 ──mode=ro──> SQLite 历史
+
+OpenDesign UI ──两轮原型与设计交接──> React 页面（设计期，无运行时模型调用）
 ```
 
 - **Collector** 独立访问各数据源，处理分页、超时、限流和飞书 Token 刷新，返回带状态的 `CollectResult`。
 - **Shared** 校验配置、判断工作日、按 GitHub/飞书账号映射成员、过滤敏感消息，提供 JSON 日志、HTTP 重试及 SQLite 存储。
 - **Generator** 将成员记录渲染成同一份 `DailyReport` 的 Markdown 与 HTML；正常零记录显示「今日无记录」，来源失败显示「数据获取失败」。
 - **Notifier** 分别投递邮件和飞书；一个渠道失败仍尝试另一个渠道。根目录 `main.py` 只委托包内编排入口执行。
+- **Web** 独立启动，只读取启动时指定的历史库，输出白名单 JSON；查询不会调用采集、生成、写入或推送。唯一业务接口为 `GET /api/v1/reports/{report_date}`。
+- **Frontend** 按日期查看日报；区分无日报、正常零记录、来源失败、查询错误，10 秒超时且不自动重试，旧响应不能覆盖新日期。
 
 **设计决策落地：**[ADR-001](specs/adrs/001-http-client.md) 采用可注入、可 Mock 的 `httpx` 客户端，当前程序使用同步 API；[ADR-002](specs/adrs/002-sqlite-storage.md) 采用本地 SQLite，以日报日期为键重复运行时更新当天记录；[ADR-003](specs/adrs/003-collect-result.md) 用 `CollectResult` 区分采集失败与成功空结果。部分来源失败时仍生成可用日报，全部来源失败时不生成、不推送。
 
@@ -43,26 +51,109 @@ GitHub 提交 ────┐
 ├── pyproject.toml                  # 依赖、可安装入口及 pytest/覆盖率配置
 ├── config.yaml.example             # 不含真实密钥的 YAML 配置样例
 ├── specs/                          # 需求、设计、ADR、契约、任务清单
+├── docs/frontend/                  # OpenDesign 证据、设计交接、截图、启动和验收记录
+├── frontend/                       # React / TypeScript / Vite、Vitest 与 Playwright
 ├── src/smart_daily_report/
 │   ├── main.py                     # 工作日判断与整条管道编排
 │   ├── collector/                  # GitHub 提交、飞书任务与消息采集
 │   ├── generator/                  # 成员日报组装、Markdown/HTML 渲染
 │   ├── notifier/                   # SMTP 邮件与飞书机器人投递
+│   ├── web/                        # 独立只读 HTTP 入口、响应 DTO 和错误映射
 │   └── shared/                     # 模型、配置、身份、HTTP、日志、日历、健康检查、存储
 └── tests/
     ├── unit/                       # 单模块边界和失败分支
     └── integration/                # Mock 管道集成场景
 ```
 
-## 快速开始（Windows PowerShell）
+## v1.1 只读页面启动（Windows PowerShell）
+
+需要 Python **≥3.11**、Node **`^22.12.0 || ^24.0.0 || >=26.0.0`**；本轮验证环境为 Python 3.12.14、Node 24.15.0、npm 11.12.1。查看日报不需要安装 OpenDesign，不需要源平台/SMTP 凭证，也不需要加载 `.env`。
+
+### 1. 首次安装
+
+在项目根目录运行（本机路径 `E:\MyCode\smart-daily-report`；其他电脑替换为自己的仓库路径）：
+
+```powershell
+Set-Location 'E:\MyCode\smart-daily-report'
+py -3.12 -m venv .runtime/venv
+.\.runtime\venv\Scripts\python.exe -m pip install -e ".[dev,web]"
+Set-Location frontend
+npm ci
+```
+
+本机已完成安装，可跳过此步骤。迁移前的 `.venv` 指向旧 Python 路径，本轮统一使用 `.runtime/venv`。没有 `py` 时，第一条安装命令改用已安装 Python 的绝对路径；例如 `& 'C:\路径\python.exe' -m venv .runtime/venv`。Python 版本必须符合要求。
+
+### 2. 窗口 A：启动只读 API
+
+```powershell
+Set-Location 'E:\MyCode\smart-daily-report'
+.\.runtime\venv\Scripts\python.exe -m smart_daily_report.web.main --database '.\data\reports.sqlite3'
+```
+
+保持窗口运行。API 监听 `http://127.0.0.1:8000`。数据库应指向生成 CLI 的 `team.database_path`；本机当前历史库中已保存日期为 **2026-04-23**。其他安装环境请查询其已有日期，不会自动获得本机历史数据。
+
+### 3. 窗口 B：启动浏览器页面
+
+```powershell
+Set-Location 'E:\MyCode\smart-daily-report\frontend'
+npm run dev
+```
+
+打开 **[http://127.0.0.1:5173](http://127.0.0.1:5173)**，选择已保存的日期，点击“查看日报”。当前本机实际历史可选择 **2026-04-23**。页面初始不自动查询；API 与页面都运行后才能读取日报。两个窗口均可按 Ctrl+C 停止。
+
+### 4. 使用可复现的虚构示例
+
+新克隆的仓库不包含实际数据库；若要先看页面，在窗口 A 用下列命令替代步骤 2：
+
+```powershell
+Set-Location 'E:\MyCode\smart-daily-report'
+.\.runtime\venv\Scripts\python.exe frontend/e2e/serve_fixture.py --port 8000
+```
+
+复用已有验收 fixture 脚本，在固定 `.runtime/e2e/` 下重建虚构历史并启动 API，不访问实际库或发通知。保持窗口 B 的前端运行，可选择：
+
+| 日期 | 虚构示例状态 |
+| --- | --- |
+| 2026-09-25 | 正常日报，两位成员，其中一位零记录 |
+| 2026-09-26 | 任务来源失败，其他板块正常 |
+| 2026-09-27 | 该日期尚无日报 |
+| 2026-09-28 | 损坏的历史 JSON，显示查询失败 |
+| 2026-09-29 | 长文本及恶意 HTML/协议的安全展示 |
+| 2026-09-30 | 已有日报，全部成员零记录 |
+
+实际 API 与示例 API 共用 8000 端口，启动其中一个即可；切换前先在原窗口 Ctrl+C。
+
+### 5. 构建预览及启动排查
+
+在 `frontend` 目录依次执行：
+
+```powershell
+npm run typecheck
+npm run build
+npm run preview
+```
+
+打开 **[http://127.0.0.1:4173](http://127.0.0.1:4173)**。API 仍需运行。默认地址是 8000；如其端口被其他应用占用，后端增加 `--port 8001`，前端启动或构建前设置 `$env:VITE_API_BASE_URL='http://127.0.0.1:8001'`。仅填公开的本机 API 地址。
+
+| 现象 | 检查方式 |
+| --- | --- |
+| 页面提示无法连接日报服务 | 检查窗口 A 是否运行，API 地址/端口是否一致 |
+| 该日期尚无日报 | 检查日期和数据库路径；不存在的库不会被自动创建 |
+| 日报读取失败 | 检查现有库是否可读、是否具备日报表、是否损坏 |
+| 端口占用 | 已启动的本项目服务可继续使用；重启前先 Ctrl+C 停止该窗口 |
+| 页面无法打开 | 检查窗口 B，使用 127.0.0.1 的 5173 或预览 4173 地址 |
+
+API 只接受规定的本机 Origin，前端请使用 `127.0.0.1`，不要改成 `localhost`。改了 API 地址后，生产预览必须重新 build。完整说明见 [本机运行文档](docs/frontend/local-run.md)。
+
+## 生成 CLI 启动（Windows PowerShell）
 
 ### 1. 安装
 
 要求 **Python 3.11 或更高版本**。在项目根目录运行：
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+py -3.12 -m venv .runtime/venv
+.\.runtime\venv\Scripts\python.exe -m pip install -e ".[dev,web]"
 Copy-Item config.yaml.example config.yaml
 ```
 
@@ -107,10 +198,10 @@ Get-Content .env | ForEach-Object {
 ### 3. 检查、预览与正式运行
 
 ```powershell
-.\.venv\Scripts\python.exe main.py --check
-.\.venv\Scripts\python.exe main.py --dry-run
-.\.venv\Scripts\python.exe main.py
-.\.venv\Scripts\python.exe main.py --date 2026-04-23 --dry-run
+.\.runtime\venv\Scripts\python.exe main.py --check
+.\.runtime\venv\Scripts\python.exe main.py --dry-run
+.\.runtime\venv\Scripts\python.exe main.py
+.\.runtime\venv\Scripts\python.exe main.py --date 2026-04-23 --dry-run
 ```
 
 - `--check` 验证配置及已启用依赖的轻量连通性，不生成、不入库、不发送；SMTP 仅检查连接，不验证登录或邮件送达。
@@ -121,10 +212,21 @@ Get-Content .env | ForEach-Object {
 ### 4. 运行自动化测试
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+.\.runtime\venv\Scripts\python.exe -m pytest -q
 ```
 
 测试对外部 HTTP API、SMTP 和 Webhook 使用 Mock，不需要真实账户或联网。`pytest` 会同时生成覆盖率报告；项目要求总覆盖率至少 90%。
+
+前端在 `frontend` 目录运行：
+
+```powershell
+npm run typecheck
+npm run test -- --run
+npm run build
+npm run test:e2e
+```
+
+浏览器验收需要已安装 Google Chrome，默认使用 `.runtime/venv/Scripts/python.exe`；其他解释器可设置 `DAILY_REPORT_PYTHON`。E2E 自动启动 8765/8766 的 fixture API 和 5173 的前端，运行前先停止占用 5173 的开发页面。安装包、环境、node_modules、构建输出、实际配置、凭证及数据库均不提交；虚构原型和验收截图可在仓库查阅。
 
 ## 运行边界与安全
 

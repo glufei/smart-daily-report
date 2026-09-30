@@ -1,7 +1,7 @@
 # 智能日报生成器任务清单
 
-- 版本：v1.0
-- 状态：已确认并实施完成
+- 版本：v1.1（2026-09-30）
+- 状态：Task 1–14 已完成；v1.1 已验收
 - 任务原则：一个任务对应一个可验证交付物；每项验收标准可观察且二值化。
 - 执行依据：`proposal.md`、`design.md`、`contracts/`。
 
@@ -16,6 +16,18 @@ Task 1 → Task 2 ─┬→ Task 3 ─┐
 ```
 
 Task 3、4、5、6 在 Task 2 完成后可并行开发，Task 7、8 在 Task 6 完成后可并行开发；Task 9 依赖所有运行模块，Task 10 依赖 Task 9。
+
+v1.1 增量依赖如下；用户已确认整体规范、只读范围及技术方案，Task 11 已核实实际 OpenDesign 0.24.1 软件。
+
+```text
+用户确认 proposal → design/ADR-004/http-api → tasks
+                          ├→ Task 11（OpenDesign UI 设计） ─┐
+                          └→ Task 12（只读 HTTP） ─────────┴→ Task 13 → Task 14
+Task 10（已完成） ──────────→ Task 12
+Task 10/11/12（回归与验收证据） ───────────────────────────────────────→ Task 14
+```
+
+Task 11 与 Task 12 的产物相互独立，可按条件分别完成；Task 13 依赖二者验收，Task 14 依赖 Task 10–13。不在确认前安装设计工具/框架或创建前端代码。每项任务结束均 checkpoint：说明完成项、实际验证结果、未验证/失败项和剩余任务，未通过的 Checklist 不勾选。
 
 ## Task 1：项目骨架与配置样例
 
@@ -144,6 +156,8 @@ Task 3、4、5、6 在 Task 2 完成后可并行开发，Task 7、8 在 Task 6 �
 
 ## 执行结果
 
+以下为 **v1.0 历史执行结果**，不是本轮重跑结果，也不表示 v1.1 已交付。
+
 - 完成 Task 1–10 的实现与 Mock 测试。
 - 当前验证：64 项测试通过；总覆盖率 91.00%（高于 90% 门槛，Python 3.12.14）。
 - Python 3.12 编译检查与 wheel 构建成功。
@@ -152,3 +166,59 @@ Task 3、4、5、6 在 Task 2 完成后可并行开发，Task 7、8 在 Task 6 �
 ## 执行顺序
 
 建议顺序：Task 1 → Task 2 → Task 3/4/5/6（满足依赖后并行）→ Task 7/8（满足依赖后并行）→ Task 9 → Task 10。Task 6 的开发可用契约定义的 Mock CollectResult 开始，不需要等待外部 API 接入。
+
+## Task 11：通过 OpenDesign 软件 UI 完成只读页面设计与迭代
+
+- **输入依赖**：用户整体确认 v1.1 规范；`proposal.md` F01/F02/F03/F06；`design.md` §1.2；ADR-004；`contracts/http-api.md`。
+- **执行前提**：核实实际 OpenDesign 软件来源/版本和 UI 可用性。安装或连接方式在执行时按已确认候选落实；不可用须报告，不用 CLI 或手写原型冒充 UI 迭代。
+- **输出文件**：`docs/frontend/design-brief.md`、`docs/frontend/opendesign-evidence.md`、`docs/frontend/prototypes/`（初版、迭代版及 UI 操作/页面截图）、`docs/frontend/DESIGN.md`（布局、颜色、排版、状态文案与交接约束）。
+- **交付物**：可追溯到 OpenDesign UI 的初版及至少一版迭代产物，不接真实数据，不写产品前端代码。
+- **验收 Checklist**：
+  - [x] F01：记录软件来源、版本/提交、许可证及 UI 运行证据；初版、迭代版输入和导出文件均可定位。
+  - [x] F01：至少一处用户可见修改有前后截图及修改依据，可核对确由 OpenDesign UI 迭代完成。
+  - [x] F02/F03：原型包含日期输入、团队/生成时间、全部成员三板块，以及加载、无日报、查询错误、正常空记录和来源失败状态，逐项有截图或状态展示。
+  - [x] F06：375×812、1440×900 设计产物可打开检查，无页面级横向溢出；控件名称与键盘交互要求写入交接文档。
+  - [x] F05：输入/产物仅含虚构 fixture，无真实消息、凭证或生产数据库；无生成、推送、编辑、管理等越界控件。
+
+## Task 12：新增复用 SQLite 的只读 HTTP 适配层
+
+- **输入依赖**：用户整体确认 v1.1 规范；Task 2/6/9/10（已完成）；`design.md` §1.2–§1.3；`contracts/http-api.md`；F02/F03/F04/F05/F07。
+- **输出文件**：`src/smart_daily_report/web/__init__.py`、`app.py`、`schemas.py`、`main.py`；必要的 `shared/storage.py` 读取改动、`pyproject.toml` 可选依赖和启动入口；`tests/unit/test_web_api.py`、必要的现有存储测试补充；`docs/frontend/local-run.md`。
+- **交付物**：`daily-report-web --database <SQLite路径>` 的本机启动入口及唯一业务 GET 查询接口，已实现。
+- **验收 Checklist**：
+  - [x] F02：临时库中有效日报 GET 返回 200，字段、顺序、时间、来源状态与 HTTP 白名单契约一致；正常空记录和单来源失败均可查询。
+  - [x] F03：严格非法日期为 400（含紧凑日期和非法日历日），未保存日期/不存在库/正确空表为 404，缺表/损坏/读取失败为 500；无效 JSON/状态/类型为 500，错误码符合契约且不泄漏路径/正文/堆栈。
+  - [x] F04：读取使用 SQLite 只读模式；请求前后数据相同且不存在库不被创建；禁用 Collector/Generator/Notifier/write_report 的替身仍能完成 GET，证明查询无生成/通知副作用；写方法为 405。
+  - [x] F05：响应仅含允许字段，不包含配置/秘密/外部用户 ID/已过滤敏感正文；恶意协议 URL 被转为 null，未知/缺失来源状态不被补成成功。
+  - [x] F05：入口仅绑定 loopback，无源平台/SMTP 凭证也可查询；Origin/Host 按契约处理，业务响应含 no-store，未允许 Origin 为 403。
+  - [x] F07：Python 基础安装不依赖 Web 框架，CLI 不导入 Web 模块；相关新增测试与既有存储/CLI 测试通过，启动说明能在 Windows 按步骤复现。
+
+## Task 13：实现 React 只读页面并接入真实查询接口
+
+- **输入依赖**：Task 11、Task 12 验收通过；`docs/frontend/DESIGN.md`；`contracts/http-api.md`；F02/F03/F05/F06。
+- **输出文件**：`frontend/` 的 Vite React TypeScript 工程、`package-lock.json`、页面/状态组件、API DTO 与请求模块、样式；`frontend/src/` 中相关 Vitest/Testing Library 测试；更新 `docs/frontend/local-run.md` 和设计交接证据。
+- **交付物**：中文单页，用户明确选择日期再查询，显示真实只读接口结果；原型与实现差异可追溯。
+- **验收 Checklist**：
+  - [x] F02：查询 fixture 日期后展示保存的团队名、日期、带时区生成时间、完整成员及固定三板块；零记录与来源失败各自使用规范文案。
+  - [x] F03：加载、404 无日报、400 输入错误、500 查询错误、网络失败、10 秒超时与无效 JSON 有对应状态测试；错误不展示“今日无记录”，不自动重试。
+  - [x] F03：快速依次查询日期 A/B，A 的迟到响应不能覆盖 B；切换/失败不遗留上一日期的内容，取消请求不误报新请求失败。
+  - [x] F05：外部文本作为文本展示，恶意 HTML 不执行且非 HTTP(S) 链接不可点击；浏览器只请求本项目只读 API，无真实凭证或数据库路径进入构建产物。
+  - [x] F06：375×812、1440×900 下无页面级横向溢出；日期/查询/重新查询有可访问名称，可键盘使用；页面保留 Task 11 确认的设计并记录必要差异。
+  - [x] F06：`npm ci`、`npm run typecheck`、`npm run build`、`npm run test -- --run` 均退出 0；Node 要求、依赖版本和 loopback 开发/预览方式已记录。
+
+## Task 14：前后端验收与 v1.0 回归
+
+- **输入依赖**：Task 10–13 完成；`proposal.md` F01–F07 与全部 v1.0 验收语义。
+- **输出文件**：`frontend/e2e/` Playwright 测试与运行配置、必要的 Python 集成测试补充、`docs/frontend/acceptance.md`（规范→测试/证据映射、命令与结果、截图及限制）；更新任务完成记录。
+- **交付物**：真实本机 API + 临时 SQLite + 前端的验收证据，测试不访问真实 GitHub/飞书/SMTP，不依赖 OpenDesign 运行时。
+- **验收 Checklist**：
+  - [x] F01：OpenDesign UI 来源、初版/迭代版和至少一处修改的完整证据可审阅，每项记录可定位到文件，不仅口头声明。
+  - [x] F02/F03：浏览器经真实 HTTP 查询 fixture，验证正常日报、零记录、单来源失败、无日报、API 存储错误及离线；接口错误从不伪装为空日报。
+  - [x] F04/F05：集成验收查询前后 SQLite 内容相同且无采集/推送调用；恶意内容/链接 fixture 安全；敏感标记和秘密不出现在 API/页面/正常日志中。
+  - [x] F06：Playwright 在两个约定视口通过，键盘操作和日期竞态测试通过；前端类型检查、构建、全部单元及浏览器测试均退出 0。
+  - [x] F07：全部 Python 测试退出 0，业务代码覆盖率 ≥90%；基础 CLI 安装/导入检查通过，Task 10 的核心场景仍通过。
+  - [x] F01–F07：验收记录逐项链接测试或人工证据，列明真实执行的命令和结果；所有未验证/失败项公开记录，只有全部通过才将 Task 11–14 和 v1.1 标记完成。
+
+## v1.1 当前 checkpoint
+
+2026-09-30：用户确认后依次完成设计与接口适配、页面、联调验收。Task 11：OpenDesign 0.24.1 真实 UI 两轮生成，28 项原型检查通过；原型手机留白及未成功提交额外 UI 修正公开记录，产品已修复。Task 12：98 项 Python 测试、92.02% 覆盖率，基础 CLI 导入/运行及真实本机 HTTP 通过。Task 13：npm ci、typecheck、build 和 15 项 Vitest 通过。Task 14：真实 API/临时 SQLite 的 14 项 Playwright 两视口验收退出 0，数据库不变，无生成/采集/通知调用，生产预览通过；首轮清理退出失败与上游提示均有记录。完整映射见 docs/frontend/acceptance.md。Task 1–10 历史结果保留，本轮未访问外部真实数据源。
