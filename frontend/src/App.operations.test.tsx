@@ -419,3 +419,68 @@ test('manual_lookup_404_after_initial_network_loss_offers_original_key_retry', a
   fireEvent.click(await screen.findByRole('button',{name:'重试原请求'})); await screen.findByText('正在生成日报…');
   expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]);
 });
+
+
+test('reauthentication_does_not_release_unknown_request_based_on_unrelated_current', async () => {
+  const posts: { key: string; body: string }[] = []; let currentReads = 0;
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(++currentReads === 1 ? null : operationFixture('succeeded')));
+    if (url.includes('/by-key/')) return Promise.reject(new Error('private-marker'));
+    if (options.method === 'POST') {
+      posts.push({ key: (options.headers as Record<string, string>)['Idempotency-Key'], body: options.body as string });
+      return Promise.reject(new Error('private-marker'));
+    }
+    return Promise.resolve(response(previewFixture()));
+  }); setup(fetchMock);
+  await waitFor(() => expect(screen.getByRole('button', { name: '采集并生成' })).toBeEnabled()); generate();
+  await screen.findByText('执行结果尚未确认');
+  fireEvent.click(screen.getByRole('button', { name: '验证令牌' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '验证令牌' })).toBeEnabled());
+  expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled(); generate();
+  expect(posts).toHaveLength(1); expect(currentReads).toBe(1);
+  expect(fetchMock.mock.calls.filter(call => String(call[0]).endsWith(`/by-key/${posts[0].key}`))).toHaveLength(2);
+});
+
+test('reauthentication_404_allows_explicit_retry_of_only_original_request', async () => {
+  const posts: { key: string; body: string }[] = []; let lookups = 0; let currentReads = 0;
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(++currentReads === 1 ? null : operationFixture('succeeded')));
+    if (url.includes('/by-key/')) return ++lookups === 1 ? Promise.reject(new Error('private-marker'))
+      : Promise.resolve(response({ error: { code: 'operation_not_found' } }, 404));
+    if (options.method === 'POST') {
+      posts.push({ key: (options.headers as Record<string, string>)['Idempotency-Key'], body: options.body as string });
+      return posts.length === 1 ? Promise.reject(new Error('private-marker'))
+        : Promise.resolve(response({ ...operationFixture(), request_id: posts[0].key }, 202));
+    }
+    return Promise.resolve(response(previewFixture()));
+  }); setup(fetchMock);
+  await waitFor(() => expect(screen.getByRole('button', { name: '采集并生成' })).toBeEnabled()); generate();
+  await screen.findByText('执行结果尚未确认');
+  fireEvent.change(screen.getByLabelText('操作令牌'), { target: { value: 'replacement-private-token' } });
+  fireEvent.click(screen.getByRole('button', { name: '验证令牌' }));
+  fireEvent.click(await screen.findByRole('button', { name: '重试原请求' }));
+  await screen.findByText('正在生成日报…');
+  expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]); expect(currentReads).toBe(1);
+});
+
+
+test('restored_delivery_results_stay_bound_to_original_version_after_same_date_update', async () => {
+  const delivered = deliveryFixture('partial_failure', 'accepted', 'rejected');
+  const newer = previewFixture(); newer.report_revision = 'b'.repeat(64); newer.report.team_name = '后续生成的新日报';
+  const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(response(url.endsWith('/current') ? delivered : newer)));
+  setup(fetchMock);
+  await waitFor(() => expect(screen.getByRole('button', { name: '验证令牌' })).toBeEnabled());
+  const results = screen.getByRole('region', { name: '推送执行结果' });
+  expect(within(results).getByText('a'.repeat(64))).toBeInTheDocument();
+  expect(within(results).getByText(/2026-09-25/)).toBeInTheDocument();
+  expect(within(results).getByText('本次邮件结果：服务商已受理')).toBeInTheDocument();
+  expect(within(results).getByText('本次飞书结果：明确拒绝，可单独重提')).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: '后续生成的新日报' })).not.toBeInTheDocument();
+  expect(screen.getByText(/日报已更新，请重新预览/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  await screen.findByRole('heading', { name: '后续生成的新日报' });
+  expect(within(screen.getByRole('region', { name: '推送执行结果' })).getByText('a'.repeat(64))).toBeInTheDocument();
+  expect(screen.getByText('b'.repeat(64))).toBeInTheDocument();
+  expect(within(results).getByText('本次邮件结果：服务商已受理')).toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});

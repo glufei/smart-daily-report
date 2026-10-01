@@ -74,17 +74,31 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     if (value.report_revision && value.report_date === selectedDate) {
       try {
         const preview = await getPreview(selectedDate, token, ticket.signal);
-        if (ticket.id === work.current.id && preview.report.report_date === selectedDate) onPreview(preview);
+        if (ticket.id === work.current.id && preview.report.report_date === selectedDate) {
+          if (preview.report_revision === value.report_revision) onPreview(preview);
+          else {
+            onPreview(null);
+            setMessage(`${value.kind === 'generation' ? texts[value.status] : deliveryTexts[value.status]}。日报已更新，请重新预览；执行结果仍属于原版本。`);
+          }
+        }
       } catch (error) { if (ticket.id === work.current.id) failure(error); }
     }
   }
   async function authenticate() {
-    const ticket = begin(); setBusy(true);
+    const ticket = begin(); setBusy(true); setCanRetry(false);
     try {
-      const current = await getCurrentOperation(token, ticket.signal);
+      const current = pending.current ? await getOperationByKey(pending.current.key, token, ticket.signal)
+        : await getCurrentOperation(token, ticket.signal);
       if (ticket.id !== work.current.id) return;
       setAuthenticated(true); await show(current, ticket, date);
-    } catch (error) { if (ticket.id === work.current.id) failure(error); }
+    } catch (error) {
+      if (ticket.id === work.current.id) {
+        failure(error);
+        if (pending.current && error instanceof OperationError && error.code === 'operation_not_found') {
+          setAuthenticated(true); setCanRetry(true);
+        }
+      }
+    }
     finally { if (ticket.id === work.current.id) setBusy(false); }
   }
   async function generate() {
@@ -155,6 +169,14 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       <button type="button" className="btn btn-primary" disabled={busy || !channels.length || operation?.status === 'running' || !!pending.current}
         onClick={() => setConfirmation({ date: preview.report.report_date, revision: preview.report_revision, channels: [...channels], targets: channels.map(channel => preview.targets[channel].label) })}>推送日报</button>
     </div>}
+    {authenticated && operation?.kind === 'delivery' && <section className="delivery-options" aria-label="推送执行结果">
+      <h3>推送执行结果</h3>
+      <p>执行日期：{operation.report_date}</p>
+      <p>执行版本：<code>{operation.report_revision}</code></p>
+      {(['email', 'lark'] as Channel[]).map(channel => <p key={channel}>
+        本次{channel === 'email' ? '邮件' : '飞书'}结果：{outcomeText[operation.deliveries[channel].status]}
+      </p>)}
+    </section>}
     {confirmation && authenticated && preview && confirmation.date === date && confirmation.revision === preview.report_revision &&
       <dialog ref={dialog} className="confirm-dialog" aria-labelledby="delivery-title" onCancel={event => { event.preventDefault(); setConfirmation(null); }}>
         <h2 id="delivery-title">确认推送日报</h2><p>{confirmation.date}</p><code>{confirmation.revision}</code>
