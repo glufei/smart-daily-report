@@ -179,3 +179,28 @@ def test_task_config_migrates_default_and_rejects_explicit_search(tmp_path):
     with pytest.raises(ConfigError): load_config(path,{})
     path.write_text(base.replace('[list-1]','[]').format(extra='  lark_task_search_path: /task/v2/tasks/search\n'),encoding='utf-8')
     assert load_config(path,{}).lark_project_ids==[]
+
+
+@pytest.mark.parametrize('smtp,environ', [
+    ({'username_env':'USER'}, {'USER':'someone'}),
+    ({'password_env':'PASS'}, {'PASS':'private-marker'}),
+    ({'username_env':'USER','password_env':'PASS'}, {}),
+    ({'username_env':'USER','password_env':'PASS'}, {'USER':'someone','PASS':'  '}),
+    ({'port':0}, {}), ({'port':65536}, {}),
+    ({'starttls':'false'}, {}), ({'use_ssl':'true'}, {}),
+])
+def test_smtp_invalid_login_or_transport_cannot_silently_start(tmp_path,smtp,environ):
+    raw={'team':{'name':'team','timezone':'UTC','smtp':{'host':'smtp.test','sender':'a@test','recipients':['b@test'],**smtp}},
+         'members':[{'member_id':'m','display_name':'M'}]}
+    path=tmp_path/'config.yaml';path.write_text(json.dumps(raw),encoding='utf-8')
+    with pytest.raises(ConfigError) as caught:
+        load_config(path,environ)
+    assert 'private-marker' not in str(caught.value)
+
+
+def test_smtp_credentials_are_required_only_if_login_is_configured(tmp_path):
+    raw={'team':{'name':'team','timezone':'UTC','smtp':{'host':'smtp.test','sender':'a@test','recipients':['b@test'],
+         'username_env':'USER','password_env':'PASS'}},'members':[{'member_id':'m','display_name':'M'}]}
+    path=tmp_path/'config.yaml';path.write_text(json.dumps(raw),encoding='utf-8')
+    config=load_config(path,{'USER':'user','PASS':'private-marker'})
+    assert config.smtp.username=='user' and config.smtp.password=='private-marker'

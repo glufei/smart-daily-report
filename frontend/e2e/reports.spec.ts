@@ -11,7 +11,7 @@ async function noOverflow(page: Page) {
 }
 async function screenshot(page: Page, project: string, state: string) {
   await noOverflow(page);
-  await page.screenshot({ path: path.resolve(`../docs/frontend/screenshots/${project}-${state}.png`), fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: path.resolve(process.env.DAILY_REPORT_E2E_SCREENSHOT_DIR || '../docs/frontend/screenshots', `${project}-${state}.png`), fullPage: true, animations: 'disabled' });
 }
 
 test('real saved reports retain every member, sections, timestamps and source states', async ({ page }, info) => {

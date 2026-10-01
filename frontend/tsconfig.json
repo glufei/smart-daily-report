@@ -5,5 +5,5 @@
     "skipLibCheck": true, "noEmit": true, "esModuleInterop": true,
     "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "vite.config.ts", "playwright.config.ts", "e2e"]
+  "include": ["src", "vite.config.ts", "playwright.config.ts", "playwright.operations.config.ts", "e2e"]
 }

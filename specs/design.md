@@ -1,9 +1,9 @@
 # 智能日报生成器架构设计（Design）
 
 - 版本：v1.2（2026-10-01）
-- 状态：用户已确认规范；实施计划待审；v1.1 已实现，v1.2 待实现
+- 状态：规范与计划已确认；Task15–17实现及离线验证已完成，Task18浏览器/交付验证进行中；真实权限、非空源样本及双渠道实际收件待验收；发布版本仍1.1.0
 - 上游：[`proposal.md`](proposal.md)
-- 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已确认、待实现）
+- 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已实现、真实验收待完成）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
 
 ## 1. 架构概览

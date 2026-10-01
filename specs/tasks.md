@@ -309,3 +309,5 @@ Task 14（历史基线） → Task 15（操作基础 + GitHub 生成预览）
 2026-10-01 实现 checkpoint：用户已确认计划/Native执行/隔离工作区；Task15 离线实现验收通过，Task16 代码和离线测试通过（pytest197/93.72%，frontend73，四模块每文件四项≥90，typecheck/build0）。Task16具体租户权限/非空实际样本仍待Task18核对，真实验收不勾选；Task17/18尚未完成，版本仍1.1.0。无真实通知。详见TDD日志及上游契约记录。
 
 2026-10-01 Task17 checkpoint：SMTP/机器人明确受理分类、固定版本推送、逐渠道落盘、React确认/取消与恢复已完成离线验证。pytest249/94.57%，frontend95每文件四项≥90，typecheck/build0。jsdom不能证明键盘模态；Task18浏览器验证及真实权限/非空样本/双渠道实际收件仍未完成，无真实通知。
+
+2026-10-01 Task18离线checkpoint：操作浏览器22、旧只读14通过；pytest260/94.61%，frontend95，npm ci/typecheck/build0。真实权限/日期/凭证/非空样本/双渠道实际收件仍未完成，用户准备配置中。Task18保持未完成，版本1.1.0；验收映射见 docs/frontend/v1.2-acceptance.md。

@@ -1,4 +1,4 @@
-# 本机只读日报页面与 API
+# 本机日报页面与 API
 
 v1.1 Task 11–14 已完成：OpenDesign 两轮 UI 原型、React 页面、只读 API 及验收。全部请求状态由确定性代码处理；页面不调用模型。
 
@@ -28,7 +28,7 @@ py -3.12 -m venv .runtime/venv
 Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/reports/2026-04-23'
 ```
 
-正常有日报返回结构化 JSON。日期非法为 400，无已保存日报为 404，已有库缺表/损坏/读取错误为 500；来源部分失败的历史日报仍为 HTTP 200，并携带对应 `failure` 状态。接口不提供生成或推送操作。
+正常有日报返回结构化 JSON。日期非法为 400，无已保存日报为 404，已有库缺表/损坏/读取错误为 500；来源部分失败的历史日报仍为 HTTP 200，并携带对应 `failure` 状态。以上 --database 模式不提供生成或推送操作。
 
 迁移后的原 `.venv` 指向旧的 Python 安装位置，不能运行；本轮保留它，另建 `.runtime/venv`。本机如果没有 `py`，可使用已安装的符合版本要求的 Python 绝对路径执行第一行。本轮实际使用 Codex 提供的 Python 3.12.14 创建此隔离环境。
 
@@ -82,3 +82,69 @@ React 19.3.0、React DOM 19.3.0、Vite 8.3.1、TypeScript 7.0.2、Zod 4.6.5；Vi
 官方来源：https://github.com/nexu-io/open-design/releases/tag/open-design-v0.24.1 。安装文件 SHA256：`3a544dca7a5f078029d55f272e218278e52edac55efbfb292d56258113e8a441`，与 GitHub 发行资产 digest 一致。
 
 软件安装在 `.tools/OpenDesign/`，与 `.runtime/` 一同被 Git 忽略。初版、第二版、实际输入、截图和可见修改已保存于 `docs/frontend/prototypes/`；详见 `opendesign-evidence.md`。产品不需要 OpenDesign 运行。已公开并修复原型手机异常留白，见 `DESIGN.md` 的交接差异。
+
+
+## v1.2 真实操作模式（开发验收待完成）
+
+Task15–17已实现。默认仍为只读；操作模式必须成对启动：后端 `--config`，前端 `VITE_API_MODE=operations`。产品不导入 fixture，不会用预制成功数据替代失败响应。当前变更在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`，main 尚未合并；本机 Python 依赖环境复用 `E:\MyCode\smart-daily-report\.runtime\venv`，因此以下工作区命令明确设置 PYTHONPATH，避免意外导入 main 的旧代码。
+
+### 窗口 A：配置与真实后端
+
+在工作区放置被忽略的 config.yaml，按 config.yaml.example 设置真实来源、成员映射、固定目标及凭证环境变量名。现有配置中旧 `lark_task_search_path: /task/v2/tasks/search` 必须迁为 `/task/v2/tasklists/{tasklist_guid}/tasks`；`lark_project_ids` 填已授权 tasklist GUID。任务按 completed_at 和团队时区展示所选日期完成的记录，不代表任意历史状态变更。
+
+```powershell
+Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report'
+$env:PYTHONPATH = Join-Path (Get-Location) 'src'
+# 将自己保管的 .env 加载到此窗口的进程环境；加载方法见 README。
+& 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe' -m smart_daily_report.web.main --config '.\config.yaml'
+```
+
+必须注入 `DAILY_REPORT_WEB_TOKEN`（至少32字符、非空白的本项目操作令牌）；按配置注入 `DAILY_REPORT_GITHUB_TOKEN`、`DAILY_REPORT_LARK_APP_ID`、`DAILY_REPORT_LARK_APP_SECRET`、`DAILY_REPORT_LARK_WEBHOOK`、`DAILY_REPORT_SMTP_USERNAME`、`DAILY_REPORT_SMTP_PASSWORD`。实际变量名以 YAML 的 *_env 值为准；不要把值写入命令示例、浏览器 URL 或 VITE_*。程序不自动读取 .env。操作令牌必须通过自己安全保管的环境文件/进程注入，刷新页面后需重新输入。
+
+GitHub公共库可匿名但有限流；私有库需读取权限。飞书应用须获租户授权、可读目标清单及群消息，机器人须在固定目标群中可用。准确 scope 名称与租户数据权限需要在开放平台核对，目前尚未获得本轮证据。无需发送邮件时可省略/清空 smtp；配置了 smtp 时 host/sender/非空 recipients、1–65535端口和布尔互斥TLS必填；声明登录环境变量时用户名和密码必须成对存在且非空白，不静默转为匿名连接。数据库路径相对于启动工作目录，操作库位于同目录 `<日报库文件名>.operations.sqlite3`；不要删除操作库来“解除重发限制”。
+
+### 窗口 B：React 操作页面
+
+```powershell
+Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report\frontend'
+$env:VITE_API_MODE = 'operations'
+$env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
+npm run dev
+```
+
+打开 http://127.0.0.1:5173，选择有源数据的工作日，输入本项目操作令牌并点“验证令牌”。点击“采集并生成”只采集、保存、预览；“查看日报”仅查询历史，“预览日报”取得可确认版本和固定目标摘要。核对来源、日期、内容后选渠道、点“推送日报”，在对话中确认日期、摘要和固定目标再发送；取消不会发送。
+
+202只是接受操作。页面每2秒查询、最多观察120秒，停止观察或关页不会取消后端；刷新后重新验证令牌、查询执行结果，不要新建请求猜测重发。丢响应先查询原幂等键；只有查明原键不存在才提供显式同键重试。accepted仅表示服务商受理；须另核对邮件收件箱和飞书群实际内容。部分受理/unknown不整渠道重发；明确rejected可单独重提失败渠道。重新生成会改变日报版本，旧确认被拒绝后需重新预览。
+
+两个窗口按 Ctrl+C 停止。单 Uvicorn worker、无 reload；生产Origin仅127.0.0.1:5173/4173，不要暴露到局域网。生产预览在同模式/公开API地址下 `npm run build`、`npm run preview`；Vite环境变量在构建时确定，切模式需重新构建。回到只读启动时先 `Remove-Item Env:VITE_API_MODE -ErrorAction SilentlyContinue`，并使用后端 --database。
+
+### 操作模式可复现 fixture（不访问真实平台）
+
+```powershell
+# 窗口 A，在隔离工作区根目录
+$env:PYTHONPATH = Join-Path (Get-Location) 'src'
+& 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe' frontend/e2e/serve_operations_fixture.py --port 8775
+# 窗口 B，在该工作区 frontend
+$env:VITE_API_MODE = 'operations'
+$env:VITE_API_BASE_URL = 'http://127.0.0.1:8775'
+npm run dev -- --port 5174
+```
+
+打开 http://127.0.0.1:5174，示例日期2026-09-25，公开假令牌 `public-e2e-only-token-not-a-real-secret-123456`。这是专用测试服务：真实 FastAPI/SQLite/Collector/Notifier，只有 HTTP/SMTP 外部边界使用替身；不会发送真实通知。固定目录 `.runtime/e2e-operations` 的测试文件会重建，绝不指向真实配置/数据库。5174 Origin仅测试工厂注入，不加入产品白名单。
+
+自动回归（frontend）：
+
+```powershell
+$env:PYTHONPATH = Join-Path (Split-Path (Get-Location) -Parent) 'src'
+$env:DAILY_REPORT_PYTHON = 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe'
+# 5173被自己需要保留的服务占用时，可使用产品已允许的4173
+$env:DAILY_REPORT_E2E_PORT = '4173'
+$env:DAILY_REPORT_E2E_SCREENSHOT_DIR = '../docs/frontend/screenshots/v1.2/readonly'
+npm run test:e2e
+npx playwright test --config playwright.operations.config.ts
+npm run test -- --run --coverage
+npm run typecheck
+npm run build
+```
+
+先释放测试用5173/5174/8765/8766/8775端口。测试使用已安装Chrome；报告见 v1.2-acceptance.md。运行截图中的令牌/来源为公开假值，不能当真实平台或实际收件证据。

@@ -62,9 +62,20 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
             recipients = smtp_raw.get("recipients")
             if not isinstance(recipients, list) or not recipients or not all(isinstance(value, str) and value.strip() for value in recipients):
                 raise ConfigError("SMTP requires non-empty recipients")
+            if any(key in smtp_raw for key in ('username_env', 'password_env')):
+                if any(not isinstance(smtp_raw.get(key), str) or not smtp_raw[key].strip()
+                       or not _env(smtp_raw, key, env) or not _env(smtp_raw, key, env).strip()
+                       for key in ('username_env', 'password_env')):
+                    raise ConfigError("SMTP login requires both configured credential variables")
+            port = int(smtp_raw.get("port", 587))
+            if not 1 <= port <= 65535:
+                raise ConfigError("SMTP port must be between 1 and 65535")
+            if any(type(smtp_raw.get(key, default)) is not bool
+                   for key, default in (("starttls", True), ("use_ssl", False))):
+                raise ConfigError("SMTP TLS options must be booleans")
             smtp = SmtpConfig(
                 host=_required(smtp_raw, "host", "team.smtp"),
-                port=int(smtp_raw.get("port", 587)),
+                port=port,
                 username=_env(smtp_raw, "username_env", env),
                 password=_env(smtp_raw, "password_env", env),
                 sender=_required(smtp_raw, "sender", "team.smtp"),
