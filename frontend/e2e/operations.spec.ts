@@ -146,3 +146,16 @@ test('keyboard_dialog_blocks_background_and_escape_never_sends', async ({ page }
   await expect(page.getByText('所选渠道已受理，请核对实际收件')).toBeVisible();
   expect(await counts()).toEqual({email:before.email+1,lark:before.lark+1});
 });
+
+
+test('manual_by_key_404_after_network_loss_recovers_same_request', async ({ page }) => {
+  await authenticate(page); let posts=0; let queries=0; const keys:string[]=[]; const before=await counts();
+  await page.route('**/api/v1/generations',async route=>{posts++; keys.push(route.request().headers()['idempotency-key']);
+    if(posts===1) await route.abort('failed'); else await route.continue(); });
+  await page.route('**/api/v1/operations/by-key/*',async route=>{ queries++; if(queries===1) await route.abort('failed'); else await route.continue(); });
+  await page.getByRole('button',{name:'采集并生成',exact:true}).click(); await expect(page.getByText('执行结果尚未确认')).toBeVisible();
+  await expect(page.getByRole('button',{name:'重试原请求',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'查询执行结果',exact:true}).click(); await expect(page.getByText('未找到该操作记录')).toBeVisible();
+  await page.getByRole('button',{name:'重试原请求',exact:true}).click(); await expect(page.getByText('日报生成完成，推送需单独确认')).toBeVisible();
+  expect(posts).toBe(2); expect(keys[1]).toBe(keys[0]); expect(await counts()).toEqual(before);
+});

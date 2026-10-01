@@ -112,12 +112,12 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     } finally { locked.current = false; if (ticket.id === work.current.id) setBusy(false); }
   }
   async function queryResult() {
-    const ticket = begin(); setBusy(true);
+    const ticket = begin(); setBusy(true); setCanRetry(false);
     try {
       const result = pending.current ? await getOperationByKey(pending.current.key, token, ticket.signal)
         : operation ? await getOperation(operation.operation_id, token, ticket.signal) : await getCurrentOperation(token, ticket.signal);
       await show(result, ticket, date);
-    } catch (error) { if (ticket.id === work.current.id) failure(error); }
+    } catch (error) { if (ticket.id === work.current.id) { failure(error); setCanRetry(!!pending.current && error instanceof OperationError && error.code === 'operation_not_found'); } }
     finally { if (ticket.id === work.current.id) setBusy(false); }
   }
   async function previewReport() {

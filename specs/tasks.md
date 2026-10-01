@@ -312,3 +312,5 @@ Task 14（历史基线） → Task 15（操作基础 + GitHub 生成预览）
 2026-10-01 Task17 checkpoint：SMTP/机器人明确受理分类、固定版本推送、逐渠道落盘、React确认/取消与恢复已完成离线验证。pytest249/94.57%，frontend95每文件四项≥90，typecheck/build0。jsdom不能证明键盘模态；Task18浏览器验证及真实权限/非空样本/双渠道实际收件仍未完成，无真实通知。
 
 2026-10-01 Task18离线checkpoint：操作浏览器22、旧只读14通过；pytest260/94.61%，frontend95，npm ci/typecheck/build0。真实权限/日期/凭证/非空样本/双渠道实际收件仍未完成，用户准备配置中。Task18保持未完成，版本1.1.0；验收映射见 docs/frontend/v1.2-acceptance.md。
+
+2026-10-01 审查checkpoint：独立审查确认的断网后手动404恢复缺口已RED→GREEN修复，前端96、操作浏览器24、pytest260/94.61%及两模式build通过。独立审查本身因模型额度中断，无完整结论；真实联调配置/日期尚待用户准备，Task18和1.2.0仍不完成。

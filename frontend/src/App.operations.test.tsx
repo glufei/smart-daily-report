@@ -400,3 +400,22 @@ test('operations_mode_labels_the_control_mode_honestly', () => {
   vi.stubEnv('VITE_API_MODE', 'operations'); render(<App />);
   expect(screen.getByText('采集与推送')).toBeInTheDocument(); expect(screen.queryByText('只读')).not.toBeInTheDocument();
 });
+
+
+test('manual_lookup_404_after_initial_network_loss_offers_original_key_retry', async () => {
+  const posts: { key: string; body: string }[] = []; let lookups=0;
+  const fetchMock=vi.fn().mockImplementation((url:string, options:RequestInit)=> {
+    if(url.endsWith('/current')) return Promise.resolve(response(null));
+    if(url.includes('/by-key/')) {
+      lookups++;
+      return lookups===1 ? Promise.reject(new Error('private-marker')) : Promise.resolve(response({error:{code:'operation_not_found'}},404));
+    }
+    posts.push({key:(options.headers as Record<string,string>)['Idempotency-Key'],body:options.body as string});
+    return posts.length===1 ? Promise.reject(new Error('private-marker')) : Promise.resolve(response({...operationFixture(),request_id:posts[0].key},202));
+  }); setup(fetchMock);
+  await waitFor(()=>expect(screen.getByRole('button',{name:'采集并生成'})).toBeEnabled()); generate();
+  await screen.findByText('执行结果尚未确认'); expect(screen.queryByRole('button',{name:'重试原请求'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'查询执行结果'})); await screen.findByText('未找到该操作记录');
+  fireEvent.click(await screen.findByRole('button',{name:'重试原请求'})); await screen.findByText('正在生成日报…');
+  expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]);
+});
