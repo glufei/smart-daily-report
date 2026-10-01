@@ -94,3 +94,10 @@ API调试台步骤（这是一次由用户执行的清单授权，不是日报�
 ```
 
 接口方法、路径、TENANT/USER及成员字段依据 [官方添加成员请求SDK](https://raw.githubusercontent.com/larksuite/oapi-sdk-python/v2_main/lark_oapi/api/task/v2/model/add_members_tasklist_request.py)、[成员模型](https://raw.githubusercontent.com/larksuite/oapi-sdk-python/v2_main/lark_oapi/api/task/v2/model/member.py)；可阅读/可编辑应用协作者能力见 [官方Go接口模型](https://raw.githubusercontent.com/larksuite/oapi-sdk-go/v3_main/service/task/v2/model.go)。不要授予editor来代替本轮只读viewer，不扩大到全部租户任务。
+
+
+## 7. 本轮开通和复验结果
+
+实际客户端分享面板仅提供“搜索用户和群组”，未假定可搜索应用。用户进入添加清单成员调试台，选择开发者user_access_token；权限配置页列出未开通的“查看、创建、更新、删除任务清单”，且明确说明该开发者用户身份调试无需企业管理员审核。勾选该行、点击批量开通并按页面确认后，切回API调试台，保留app/viewer请求，开始调试。用户提供HTTP200/code0成功结果。
+
+用户身份管理权限用于加入协作成员；项目运行时继续用tenant_access_token和应用viewer角色读取，不将个人Token写入.env。独立复验详情和任务GET均200/code0，应用role=viewer；未完成任务0不能当采集失败。用户将已达到测试目的的任务实际标记完成后，completed列表1条，完成日期2026-10-01、负责人匹配当前配置；生成/SQLite/React核对已通过，尚未推送。截图若含Authorization须遮住，不将完整cURL/访问凭证存进仓库或正常日志。

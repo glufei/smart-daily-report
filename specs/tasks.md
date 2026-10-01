@@ -321,3 +321,6 @@ Task 14（历史基线） → Task 15（操作基础 + GitHub 生成预览）
 2026-10-01 首次真实生成checkpoint：task:tasklist:read在用户发布后已生效；应用列取清单HTTP200/code0但可见0个。配置误填单条任务GUID，清单任务HTTP404/code1470404；单条任务GET403/code1470403，等待正确清单分享链接及应用数据访问。真实产品API仅生成一次2026-09-30，partial_failure，GitHub/群消息success但当日0条、任务failure，run耗时1640ms；React真实历史GET已显示相同来源状态。两渠道not_requested/attempts0，无发送。非空源核对/真实双渠道收件/限流仍未完成，不勾选Task18、不提升版本；本次仅诊断/文档，无新增业务代码或虚构TDD。
 
 2026-10-01 正确清单checkpoint：用户提供清单分享链接，本机config.yaml仅替换清单GUID并通过load_config；正确清单详情/任务GET均403/code1470403，应用身份资源访问尚未授权。未取得详情，不臆断成员列表。待有管理权限的用户添加当前自建应用为可阅读协作者后，重启后端加载新配置并复验；无授权写操作、无新生成/发送，Task18继续未完成。
+
+
+2026-10-01 清单授权与真实任务checkpoint：用户使用管理者user_access_token调试台开通页面明确要求的用户身份权限，添加当前应用为viewer返回200/code0；项目tenant身份独立详情/任务GET200/code0。用户将真实任务标记完成并选择实际日期2026-10-01，completed任务1条、负责人映射既有成员；产品API只生成一次succeeded，三源success、GitHub0/任务1/群消息0，任务GUID/标题/完成时刻/成员/SQLite/预览/React一致，run3687ms。163 SMTP认证235，未MAIL/RCPT/DATA；双渠道not_requested/attempts0。用户确认当天没有提交/群消息，非空GitHub/群消息、精确消息scope资料及双渠道实际收件继续未完成；Task18不勾选，版本仍1.1.0。本轮无业务代码修改，不伪造新增TDD或重跑测试结果，文档/运行数据仍隔离于main。
