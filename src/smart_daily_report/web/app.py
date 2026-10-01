@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 import re
 import sqlite3
@@ -9,6 +10,7 @@ from typing import Sequence
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -19,6 +21,7 @@ from .schemas import ErrorResponse, ReportView
 
 ALLOWED_ORIGINS = ("http://127.0.0.1:5173", "http://127.0.0.1:4173")
 ERROR_MESSAGES = {
+    "operation_unauthorized": "操作令牌无效或未提供",
     "invalid_report_date": "日期无效，请使用 YYYY-MM-DD",
     "origin_not_allowed": "请求来源未允许",
     "report_not_found": "该日期尚无日报",
@@ -38,19 +41,34 @@ def _error(status: int, code: str, run_id: str) -> JSONResponse:
                         status_code=status, headers={"Cache-Control": "no-store"})
 
 
-def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "localhost")) -> FastAPI:
+def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "localhost"), *,
+               operations=None, operation_token: str | None = None,
+               allowed_origins: Sequence[str] = ALLOWED_ORIGINS) -> FastAPI:
     """Read a fixed database; no collectors, notifiers or secret configuration."""
     app = FastAPI(title="智能日报只读接口", version="1.1.0", docs_url=None, redoc_url=None)
     database = db_path.resolve()
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
-    app.add_middleware(CORSMiddleware, allow_origins=list(ALLOWED_ORIGINS), allow_methods=["GET"])
+    app.add_middleware(CORSMiddleware, allow_origins=list(allowed_origins),
+                       allow_methods=["GET", "POST", "OPTIONS"] if operations is not None else ["GET"],
+                       allow_headers=["Authorization", "Content-Type", "Idempotency-Key"] if operations is not None else [])
+    bearer = HTTPBearer(auto_error=False)
 
     @app.middleware("http")
     async def guard_request(request: Request, call_next):
         request.state.run_id = new_run_id()
         origin = request.headers.get("origin")
-        if origin is not None and origin not in ALLOWED_ORIGINS:
+        if origin is not None and origin not in allowed_origins:
             return _error(403, "origin_not_allowed", request.state.run_id)
+        protected = (request.url.path in ("/api/v1/generations", "/api/v1/deliveries")
+                     or request.url.path.startswith("/api/v1/operations/")
+                     or request.url.path.endswith("/preview"))
+        if operations is not None and protected and request.method != "OPTIONS":
+            credentials = await bearer(request)
+            if not credentials or not operation_token or not hmac.compare_digest(credentials.credentials.encode(), operation_token.encode()):
+                response = _error(401, "operation_unauthorized", request.state.run_id)
+                if origin is not None:
+                    response.headers["Access-Control-Allow-Origin"] = origin
+                return response
         try:
             response = await call_next(request)
         except Exception:
@@ -91,4 +109,7 @@ def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "loca
                                                    "status": "success"})
         return view
 
+    if operations is not None:
+        from .operation_routes import attach_operation_routes
+        attach_operation_routes(app, operations)
     return app

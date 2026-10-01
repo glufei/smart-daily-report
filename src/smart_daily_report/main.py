@@ -103,7 +103,11 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
         members = map_records_to_members(config, commits, tasks, messages, statuses)
         report = generate_daily_report(report_date, config.team_name, members, statuses, datetime.now(timezone.utc))
         db_path = Path(config.database_path)
-        write_report(db_path, report)
+        try:
+            write_report(db_path, report)
+        except Exception as exc:
+            logger.error("report_write_failed", extra={"run_id": run_id, "error_type": type(exc).__name__})
+            return RunResult(False, error_code="report_write_failed", sources=source_results)
         deliveries = {}
         if not dry_run:
             try:

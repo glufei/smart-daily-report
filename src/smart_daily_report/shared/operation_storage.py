@@ -19,6 +19,7 @@ class OperationStore:
         self.path = path
 
     def initialize(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute("""CREATE TABLE IF NOT EXISTS operations (
                 operation_id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL,
