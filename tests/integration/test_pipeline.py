@@ -81,7 +81,9 @@ def test_pipeline_collects_generates_stores_and_delivers_both_channels(config, t
         def __exit__(self, *args): pass
         def starttls(self): pass
         def login(self, *args): pass
-        def send_message(self, message): assert "fix" in message.get_body(("html",)).get_content()
+        def send_message(self, message):
+            assert "fix" in message.get_body(("html",)).get_content()
+            return {}
     client = httpx.Client(transport=httpx.MockTransport(handler))
     result = run_report(config, date(2026, 9, 25), client=client, smtp_factory=SMTP, sleep=lambda _: None)
     assert result.success and result.report is not None
@@ -109,3 +111,13 @@ def test_five_member_generation_meets_sixty_second_budget(records, statuses):
     report = generate_daily_report(date(2026, 9, 25), "team", members, statuses, datetime.now().astimezone())
     elapsed = perf_counter() - started
     assert len(report.members) == 5 and elapsed < 60
+
+
+def test_cli_pipeline_does_not_attempt_disabled_email(config,tmp_path,monkeypatch):
+    from dataclasses import replace
+    cfg=replace(config,github_repositories=['acme/repo'],database_path=str(tmp_path/'report.sqlite3'),smtp=replace(config.smtp,host=''))
+    calls=[]
+    monkeypatch.setattr('smart_daily_report.main.send_email',lambda *args,**kwargs:calls.append(args))
+    with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json=[]))) as client:
+        result=run_report(cfg,date(2026,9,25),client=client)
+    assert calls==[] and result.success and result.deliveries=={}

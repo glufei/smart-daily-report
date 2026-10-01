@@ -179,6 +179,7 @@ class DeliveryResult:
     success: bool
     attempts: int
     error_code: str | None = None
+    outcome: Literal["accepted", "rejected", "partial_failure", "unknown"] | None = None
 
 
 @dataclass(frozen=True)

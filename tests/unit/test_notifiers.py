@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from email.message import EmailMessage
 
 import httpx
+import pytest
 
 from smart_daily_report.notifier.email import send_email
 from smart_daily_report.notifier.lark_bot import send_lark_message
@@ -22,6 +23,7 @@ class FakeSMTP:
     def send_message(self, message):
         assert isinstance(message, EmailMessage) and "<h1>daily</h1>" in message.as_string()
         FakeSMTP.calls += 1
+        return {}
 
 
 def test_email_delivers_html():
@@ -45,7 +47,7 @@ def test_email_uses_implicit_ssl_when_configured(monkeypatch):
     assert result.success and calls[0][0][:2] == ("smtp.163.com", 465)
 
 
-def test_email_retries_temporary_failure_then_succeeds():
+def test_email_send_failure_is_unknown_without_retry():
     calls = []
     class Flaky(FakeSMTP):
         def send_message(self, message):
@@ -53,7 +55,7 @@ def test_email_retries_temporary_failure_then_succeeds():
             if len(calls) == 1:
                 raise OSError("temporary")
     result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, "u", "p", "from@test", [], False), Flaky, lambda _: None)
-    assert result.success and result.attempts == 2
+    assert not result.success and result.outcome == "unknown" and result.attempts == 1 and len(calls) == 1
 
 
 def test_email_does_not_retry_authentication_failure():
@@ -103,3 +105,90 @@ def test_lark_webhook_reports_unavailable_after_retry_exhaustion():
     client = httpx.Client(transport=httpx.MockTransport(lambda request: (calls.append(request), httpx.Response(503))[1]))
     result = send_lark_message(report(), "https://webhook.invalid/secret", client, sleep=lambda _: None)
     assert not result.success and result.attempts == 3 and len(calls) == 3
+
+
+def test_partial_recipient_refusal_is_not_full_success():
+    calls=[]
+    class Partial(FakeSMTP):
+        def send_message(self,message): calls.append(message); return {'rejected@test':(550,b'private-marker')}
+    result=send_email(report(),['lead@test','rejected@test'],SmtpConfig('host',587,None,None,'from@test',[]),Partial,lambda _:None)
+    assert result.success is False and result.outcome=='partial_failure'
+    assert result.attempts==1 and len(calls)==1
+
+
+def test_connect_failure_can_retry_before_sending():
+    connections=[]; sends=[]
+    class Accept(FakeSMTP):
+        def send_message(self,message): sends.append(message); return {}
+    def factory(*args,**kwargs):
+        connections.append(args)
+        if len(connections)<3: raise OSError('private-marker')
+        return Accept()
+    result=send_email(report(),['lead@test'],SmtpConfig('host',587,None,None,'from@test',[]),factory,lambda _:None)
+    assert result.success and result.outcome=='accepted' and result.attempts==3 and len(sends)==1
+
+
+def test_auth_failure_is_rejected_without_retry():
+    import smtplib
+    sends=[]
+    class Reject(FakeSMTP):
+        def login(self,*args): raise smtplib.SMTPAuthenticationError(535,b'private-marker')
+        def send_message(self,message): sends.append(message); return {}
+    result=send_email(report(),['lead@test'],SmtpConfig('host',587,'user','password','from@test',[]),Reject,lambda _:None)
+    assert not result.success and result.outcome=='rejected' and result.attempts==1 and sends==[]
+
+
+def test_send_response_timeout_is_unknown_without_retry():
+    sends=[]
+    class Timeout(FakeSMTP):
+        def send_message(self,message): sends.append(message); raise TimeoutError('private-marker')
+    result=send_email(report(),['lead@test'],SmtpConfig('host',587,None,None,'from@test',[]),Timeout,lambda _:None)
+    assert not result.success and result.outcome=='unknown' and result.attempts==1 and len(sends)==1
+
+
+def test_quit_failure_after_acceptance_does_not_resend():
+    sends=[]
+    class QuitFailure(FakeSMTP):
+        def send_message(self,message): sends.append(message); return {}
+        def __exit__(self,*args): raise OSError('private-marker')
+    result=send_email(report(),['lead@test'],SmtpConfig('host',587,None,None,'from@test',[]),QuitFailure,lambda _:None)
+    assert result.success and result.outcome=='accepted' and result.attempts==1 and len(sends)==1
+
+
+def test_smtp_response_without_acceptance_evidence_is_unknown():
+    sends=[]
+    class MissingEvidence(FakeSMTP):
+        def send_message(self,message): sends.append(message); return None
+    result=send_email(report(),['lead@test'],SmtpConfig('host',587,None,None,'from@test',[]),MissingEvidence,lambda _:None)
+    assert not result.success and result.outcome=='unknown' and len(sends)==1
+
+
+@pytest.mark.parametrize('phase', ['sender','recipients','data','unsupported_tls'])
+def test_explicit_smtp_rejection_cannot_be_uncertain_or_retried(phase):
+    import smtplib
+    calls=[]
+    class Reject(FakeSMTP):
+        def starttls(self):
+            if phase=='unsupported_tls': raise smtplib.SMTPNotSupportedError('private-marker')
+        def send_message(self,message):
+            calls.append(message)
+            if phase=='sender': raise smtplib.SMTPSenderRefused(550,b'private-marker','from@test')
+            if phase=='recipients': raise smtplib.SMTPRecipientsRefused({'lead@test':(550,b'private-marker')})
+            raise smtplib.SMTPDataError(550,b'private-marker')
+    result=send_email(report(),['lead@test'],SmtpConfig('host',587,None,None,'from@test',[]),Reject,lambda _:None)
+    assert result.outcome=='rejected' and not result.success and result.attempts==1
+    assert len(calls)==(0 if phase=='unsupported_tls' else 1)
+
+
+def test_tls_modes_and_payload_keep_confirmed_content():
+    events=[]; snapshot=report()
+    class Accept(FakeSMTP):
+        def starttls(self): events.append('tls')
+        def login(self,*args): events.append('login')
+        def send_message(self,message):
+            events.append('send')
+            assert message.get_body(('html',)).get_content().strip()==snapshot.html
+            assert 'private-password' not in message.as_string()
+            return {}
+    result=send_email(snapshot,['lead@test'],SmtpConfig('host',587,'user','private-password','from@test',[]),Accept,lambda _:None)
+    assert result.outcome=='accepted' and events==['tls','login','send']

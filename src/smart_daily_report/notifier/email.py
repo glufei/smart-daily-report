@@ -17,6 +17,8 @@ def send_email(report: DailyReport, recipients: Sequence[str], smtp_config: Smtp
     message.set_content("请使用支持 HTML 的邮件客户端查看日报。")
     message.add_alternative(report.html, subtype="html")
     for attempt in range(1, 4):
+        submitted = False
+        result = None
         try:
             connection_factory = smtplib.SMTP_SSL if smtp_config.use_ssl else smtp_factory
             with connection_factory(smtp_config.host, smtp_config.port, timeout=10) as server:
@@ -24,12 +26,24 @@ def send_email(report: DailyReport, recipients: Sequence[str], smtp_config: Smtp
                     server.starttls()
                 if smtp_config.username:
                     server.login(smtp_config.username, smtp_config.password or "")
-                server.send_message(message)
-            return DeliveryResult(True, attempt)
-        except (smtplib.SMTPAuthenticationError, smtplib.SMTPRecipientsRefused):
-            return DeliveryResult(False, attempt, "smtp_rejected")
+                submitted = True
+                refused = server.send_message(message)
+                if not isinstance(refused, dict):
+                    result = DeliveryResult(False, attempt, "smtp_unknown", "unknown")
+                elif refused:
+                    result = DeliveryResult(False, attempt, "smtp_partial", "partial_failure")
+                else:
+                    result = DeliveryResult(True, attempt, outcome="accepted")
+            return result
+        except (smtplib.SMTPAuthenticationError, smtplib.SMTPRecipientsRefused,
+                smtplib.SMTPSenderRefused, smtplib.SMTPDataError, smtplib.SMTPNotSupportedError):
+            return result or DeliveryResult(False, attempt, "smtp_rejected", "rejected")
         except (OSError, smtplib.SMTPException):
+            if result is not None:
+                return result
+            if submitted:
+                return DeliveryResult(False, attempt, "smtp_unknown", "unknown")
             if attempt == 3:
-                return DeliveryResult(False, attempt, "smtp_unavailable")
+                return DeliveryResult(False, attempt, "smtp_unavailable", "rejected")
             sleep(min(2 ** (attempt - 1), 5))
-    return DeliveryResult(False, 3, "smtp_unavailable")
+    return DeliveryResult(False, 3, "smtp_unavailable", "rejected")

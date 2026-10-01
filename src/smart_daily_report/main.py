@@ -110,13 +110,14 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
             return RunResult(False, error_code="report_write_failed", sources=source_results)
         deliveries = {}
         if not dry_run:
-            try:
-                email_result = send_email(report, config.smtp.recipients, config.smtp, **({"smtp_factory": smtp_factory} if smtp_factory else {}), sleep=sleep)
-            except Exception as exc:
-                email_result = DeliveryResult(False, 1, "email_unhandled")
-                logger.error("notifier_unhandled_error", extra={"run_id": run_id, "channel": "email", "status": "failure", "error_code": "email_unhandled", "error_type": type(exc).__name__})
-            deliveries["email"] = email_result
-            logger.info("delivery_finished", extra={"run_id": run_id, "channel": "email", "status": "success" if email_result.success else "failure", "error_code": email_result.error_code})
+            if config.smtp.host:
+                try:
+                    email_result = send_email(report, config.smtp.recipients, config.smtp, **({"smtp_factory": smtp_factory} if smtp_factory else {}), sleep=sleep)
+                except Exception as exc:
+                    email_result = DeliveryResult(False, 1, "email_unhandled")
+                    logger.error("notifier_unhandled_error", extra={"run_id": run_id, "channel": "email", "status": "failure", "error_code": "email_unhandled", "error_type": type(exc).__name__})
+                deliveries["email"] = email_result
+                logger.info("delivery_finished", extra={"run_id": run_id, "channel": "email", "status": "success" if email_result.success else "failure", "error_code": email_result.error_code})
             if config.lark_webhook:
                 try:
                     lark_result = send_lark_message(report, config.lark_webhook, client=client, sleep=sleep)
