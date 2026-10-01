@@ -195,3 +195,4 @@ class RunResult:
     report: DailyReport | None = None
     deliveries: dict[str, DeliveryResult] = field(default_factory=dict)
     error_code: str | None = None
+    sources: dict[str, CollectResult] = field(default_factory=dict)

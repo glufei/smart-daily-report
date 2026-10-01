@@ -120,8 +120,9 @@ def test_health_check_handles_unreachable_services(config, monkeypatch):
 
 
 def test_run_report_dry_run_and_all_sources_failure(config, tmp_path):
-    config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite")})
-    result = run_report(config, date(2026, 9, 25), dry_run=True)
+    config = config.__class__(**{**config.__dict__, "github_repositories": ["acme/repo"], "database_path": str(tmp_path / "db.sqlite")})
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[])))
+    result = run_report(config, date(2026, 9, 25), dry_run=True, client=client)
     assert result.success and result.report is not None
     config = config.__class__(**{**config.__dict__, "github_repositories": ["a/b"], "github_token": "token",
                                  "lark_project_ids": ["project"], "lark_chat_ids": ["chat"]})
@@ -147,3 +148,64 @@ members:
     assert main(["--config", str(config_path), "--dry-run"]) == 0
     monkeypatch.setattr("smart_daily_report.main.run_report", lambda *args: RunResult(False))
     assert main(["--config", str(config_path)]) == 1
+
+
+def test_enabled_github_failure_cannot_be_hidden_by_disabled_sources(config, tmp_path):
+    from dataclasses import replace
+    database = tmp_path / "reports.sqlite3"
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client, sleep=lambda _: None)
+    assert result.success is False
+    assert result.error_code == "all_sources_failed"
+    assert result.report is None and not database.exists()
+
+
+def test_no_enabled_sources_does_not_create_history(config, tmp_path):
+    from dataclasses import replace
+    database = tmp_path / "reports.sqlite3"
+    cfg = replace(config, database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[]))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client)
+    assert result.success is False
+    assert result.error_code == "no_sources_configured"
+    assert result.report is None and not database.exists()
+
+
+def test_generation_sources_match_saved_report(config, tmp_path):
+    from dataclasses import replace
+    from pathlib import Path
+    from smart_daily_report.shared.storage import get_report
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(tmp_path / "reports.sqlite3"))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[]))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client)
+    source_results = getattr(result, "sources", None)
+    assert source_results is not None, "Web needs the actual enabled-source results"
+    assert set(source_results) == {"github_commits"}
+    assert source_results["github_commits"].status == "success"
+    assert result.success and result.deliveries == {}
+    assert get_report(Path(cfg.database_path), date(2026, 9, 25)).source_status["github_commits"] == source_results["github_commits"].status
+
+
+def test_non_workday_has_no_source_calls(config, tmp_path):
+    from dataclasses import replace
+    requests = []
+    database = tmp_path / "reports.sqlite3"
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: (requests.append(request), httpx.Response(403))[1])) as client:
+        result = run_report(cfg, date(2026, 9, 26), dry_run=True, client=client)
+    assert result.skipped and result.success
+    assert getattr(result, "sources", None) == {}
+    assert requests == [] and not database.exists()
+
+
+def test_failed_sources_are_available_without_creating_report(config, tmp_path):
+    from dataclasses import replace
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(tmp_path / "reports.sqlite3"))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client)
+    source_results = getattr(result, "sources", None)
+    assert source_results is not None
+    assert set(source_results) == {"github_commits"}
+    assert source_results["github_commits"].status == "failure"
+    assert result.error_code == "all_sources_failed"

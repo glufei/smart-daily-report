@@ -10,8 +10,9 @@ from smart_daily_report.shared.models import MemberReport
 
 
 def test_pipeline_dry_run_generates_and_stores_without_delivery(config, tmp_path):
-    config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite")})
-    result = run_report(config, date(2026, 9, 25), dry_run=True)
+    config = config.__class__(**{**config.__dict__, "github_repositories": ["acme/repo"], "database_path": str(tmp_path / "db.sqlite")})
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[])))
+    result = run_report(config, date(2026, 9, 25), dry_run=True, client=client)
     assert result.success and result.report is not None
     assert result.deliveries == {}
     assert Path(config.database_path).exists()
@@ -92,11 +93,12 @@ def test_pipeline_collects_generates_stores_and_delivers_both_channels(config, t
 def test_unexpected_email_error_does_not_block_lark_delivery(config, tmp_path, monkeypatch):
     from smart_daily_report.shared.models import DeliveryResult
     from smart_daily_report.main import run_report
-    config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite"), "lark_webhook": "https://hook.test"})
+    config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite"), "lark_webhook": "https://hook.test", "github_repositories": ["acme/repo"]})
     called = []
     monkeypatch.setattr("smart_daily_report.main.send_email", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("mail")))
     monkeypatch.setattr("smart_daily_report.main.send_lark_message", lambda *args, **kwargs: (called.append(True), DeliveryResult(True, 1))[1])
-    result = run_report(config, date(2026, 9, 25), dry_run=False, sleep=lambda _: None)
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[])))
+    result = run_report(config, date(2026, 9, 25), dry_run=False, client=client, sleep=lambda _: None)
     assert not result.success and result.deliveries["email"].error_code == "email_unhandled"
     assert result.deliveries["lark"].success and called == [True]
 
