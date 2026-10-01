@@ -75,11 +75,11 @@ def test_email_reports_unavailable_after_three_attempts():
     assert waits == [1, 2]
 
 
-def test_lark_retries_transient_failure_and_sends_markdown():
+def test_lark_retries_connection_failure_and_sends_markdown():
     calls = []
     def handler(request):
         calls.append(request)
-        if len(calls) == 1: return httpx.Response(500)
+        if len(calls) == 1: raise httpx.ConnectError("temporary")
         assert request.read()
         return httpx.Response(200, json={"StatusCode": 0})
     client = httpx.Client(transport=httpx.MockTransport(handler))
@@ -100,11 +100,11 @@ def test_lark_webhook_does_not_retry_client_error():
     assert not result.success and result.error_code == "http_400" and len(calls) == 1
 
 
-def test_lark_webhook_reports_unavailable_after_retry_exhaustion():
+def test_lark_webhook_server_error_is_unknown_without_retry():
     calls = []
     client = httpx.Client(transport=httpx.MockTransport(lambda request: (calls.append(request), httpx.Response(503))[1]))
     result = send_lark_message(report(), "https://webhook.invalid/secret", client, sleep=lambda _: None)
-    assert not result.success and result.attempts == 3 and len(calls) == 3
+    assert not result.success and result.outcome == "unknown" and result.attempts == 1 and len(calls) == 1
 
 
 def test_partial_recipient_refusal_is_not_full_success():
@@ -192,3 +192,52 @@ def test_tls_modes_and_payload_keep_confirmed_content():
             return {}
     result=send_email(snapshot,['lead@test'],SmtpConfig('host',587,'user','private-password','from@test',[]),Accept,lambda _:None)
     assert result.outcome=='accepted' and events==['tls','login','send']
+
+
+def test_modern_lark_error_code_cannot_default_to_success():
+    calls=[]
+    with httpx.Client(transport=httpx.MockTransport(lambda request:(calls.append(request),httpx.Response(200,json={'code':19024,'msg':'private-marker'}))[1])) as client:
+        result=send_lark_message(report(),'https://hook.test/key',client,lambda _:None)
+    assert not result.success and result.outcome=='rejected' and result.attempts==1 and len(calls)==1
+
+
+@pytest.mark.parametrize('payload,outcome',[
+ ({'code':0},'accepted'),({'StatusCode':0},'accepted'),({'code':0,'StatusCode':0},'accepted'),
+ ({'StatusCode':19000},'rejected'),({},'unknown'),({'code':0,'StatusCode':19000},'unknown'),
+ ({'code':False},'unknown'),({'code':'0'},'unknown'),(['bad'],'unknown')])
+def test_lark_delivery_requires_explicit_consistent_business_evidence(payload,outcome):
+    calls=[]
+    with httpx.Client(transport=httpx.MockTransport(lambda request:(calls.append(request),httpx.Response(200,json=payload))[1])) as client:
+        result=send_lark_message(report(),'https://hook.test/key',client,lambda _:None)
+    assert result.outcome==outcome and result.success==(outcome=='accepted') and result.attempts==1 and len(calls)==1
+
+
+@pytest.mark.parametrize('kind',['invalid_json','read_timeout','write_error','server_error'])
+def test_lark_uncertainty_is_not_automatically_reposted(kind):
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if kind=='invalid_json': return httpx.Response(200,text='{private-marker')
+        if kind=='read_timeout': raise httpx.ReadTimeout('private-marker')
+        if kind=='write_error': raise httpx.WriteError('private-marker')
+        return httpx.Response(503)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client: result=send_lark_message(report(),'https://hook.test/key',client,lambda _:None)
+    assert not result.success and result.outcome=='unknown' and result.attempts==1 and len(calls)==1
+
+
+@pytest.mark.parametrize('error_cls',[httpx.ConnectError,httpx.ConnectTimeout])
+def test_lark_only_pre_submission_connection_failure_can_retry(error_cls):
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if len(calls)<3: raise error_cls('private-marker')
+        return httpx.Response(200,json={'code':0})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client: result=send_lark_message(report(),'https://hook.test/key',client,lambda _:None)
+    assert result.success and result.outcome=='accepted' and result.attempts==3 and len(calls)==3
+
+
+def test_lark_connection_exhaustion_is_rejected_before_acceptance():
+    calls=[]
+    def handler(request): calls.append(request); raise httpx.ConnectError('private-marker')
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client: result=send_lark_message(report(),'https://hook.test/key',client,lambda _:None)
+    assert not result.success and result.outcome=='rejected' and result.attempts==3 and len(calls)==3

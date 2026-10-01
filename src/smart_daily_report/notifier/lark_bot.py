@@ -19,21 +19,26 @@ def send_lark_message(report: DailyReport, webhook_url: str, client: httpx.Clien
                     "config": {"wide_screen_mode": True},
                     "elements": [{"tag": "markdown", "content": report.markdown}],
                 }}, timeout=10)
-                if response.status_code == 429 or response.status_code >= 500:
-                    if attempt < 3:
-                        sleep(min(2 ** (attempt - 1), 5))
-                        continue
+                if response.status_code >= 500:
+                    return DeliveryResult(False, attempt, "lark_unknown", "unknown")
                 if response.is_error:
-                    return DeliveryResult(False, attempt, f"http_{response.status_code}")
+                    return DeliveryResult(False, attempt, f"http_{response.status_code}", "rejected")
                 payload = response.json()
-                if payload.get("StatusCode", 0) != 0:
-                    return DeliveryResult(False, attempt, "lark_rejected")
-                return DeliveryResult(True, attempt)
-            except (httpx.TransportError, ValueError):
+                if not isinstance(payload, dict):
+                    return DeliveryResult(False, attempt, "lark_unknown", "unknown")
+                codes = [payload[key] for key in ("code", "StatusCode") if key in payload]
+                if not codes or any(type(code) is not int for code in codes) or len(set(codes)) != 1:
+                    return DeliveryResult(False, attempt, "lark_unknown", "unknown")
+                if codes[0] != 0:
+                    return DeliveryResult(False, attempt, "lark_rejected", "rejected")
+                return DeliveryResult(True, attempt, outcome="accepted")
+            except (httpx.ConnectError, httpx.ConnectTimeout):
                 if attempt == 3:
-                    return DeliveryResult(False, attempt, "lark_unavailable")
+                    return DeliveryResult(False, attempt, "lark_unavailable", "rejected")
                 sleep(min(2 ** (attempt - 1), 5))
-        return DeliveryResult(False, 3, "lark_unavailable")
+            except (httpx.TransportError, ValueError):
+                return DeliveryResult(False, attempt, "lark_unknown", "unknown")
+        return DeliveryResult(False, 3, "lark_unavailable", "rejected")
     finally:
         if own_client:
             client.close()
