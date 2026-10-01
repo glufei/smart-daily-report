@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
+from typing import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -29,7 +30,7 @@ class OperationStore:
 
     def accept(self, request_id: str, kind: str, report_date: str,
                request_fingerprint: str, report_revision: str | None,
-               sources: dict, deliveries: dict) -> tuple[dict, bool]:
+               sources: dict, deliveries: dict, *, before_insert: Callable[[], None] | None = None) -> tuple[dict, bool]:
         with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute("SELECT payload, request_fingerprint FROM operations WHERE request_id=?", (request_id,)).fetchone()
@@ -39,6 +40,15 @@ class OperationStore:
                 return json.loads(existing[0]), False
             if connection.execute("SELECT 1 FROM operations WHERE status='running' LIMIT 1").fetchone():
                 raise OperationConflict("operation_busy")
+            if before_insert is not None:
+                before_insert()
+            if kind == "delivery":
+                selected = [name for name, outcome in deliveries.items() if outcome["status"] == "pending"]
+                for row in connection.execute("SELECT payload FROM operations").fetchall():
+                    prior = json.loads(row[0])
+                    if prior["report_date"] == report_date and prior["report_revision"] == report_revision:
+                        if any(prior["deliveries"][name]["status"] in ("accepted", "partial_failure", "unknown", "pending") for name in selected):
+                            raise OperationConflict("delivery_not_repeatable")
             now = datetime.now(timezone.utc).isoformat()
             record = {"operation_id": str(uuid4()), "request_id": request_id,
                       "kind": kind, "report_date": report_date, "status": "running",

@@ -34,10 +34,10 @@ ERROR_MESSAGES = {
 logger = logging.getLogger("smart_daily_report")
 
 
-def _error(status: int, code: str, run_id: str) -> JSONResponse:
+def _error(status: int, code: str, run_id: str, *, operation: bool = False) -> JSONResponse:
     logger.warning("report_query_failed", extra={"run_id": run_id, "source": "history",
                                                "status": "failure", "error_code": code})
-    return JSONResponse({"error": {"code": code, "message": ERROR_MESSAGES[code]}},
+    return JSONResponse({"error": {"code": code, "message": "操作请求处理失败" if operation and code == "internal_error" else ERROR_MESSAGES[code]}},
                         status_code=status, headers={"Cache-Control": "no-store"})
 
 
@@ -72,7 +72,9 @@ def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "loca
         try:
             response = await call_next(request)
         except Exception:
-            response = _error(500, "internal_error", request.state.run_id)
+            response = _error(500, "internal_error", request.state.run_id, operation=operations is not None and protected)
+            if origin is not None:
+                response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Cache-Control"] = "no-store"
         return response
 

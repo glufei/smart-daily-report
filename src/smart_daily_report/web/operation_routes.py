@@ -8,10 +8,14 @@ from fastapi.responses import JSONResponse
 from pydantic import TypeAdapter
 
 from ..shared.operation_storage import OperationConflict
-from .operation_schemas import GenerationRequest, OperationId, OperationView
+from .operation_schemas import DeliveryRequest, GenerationRequest, OperationId, OperationView
 from .operations import OperationError, OperationService
 
 MESSAGES = {
+    "non_workday": "该日期为非工作日，不能推送",
+    "channel_not_configured": "所选推送渠道未配置",
+    "report_revision_changed": "日报已更新，请重新预览后推送",
+    "delivery_not_repeatable": "该渠道已接受或结果待核实，不能重复推送",
     "invalid_request": "操作参数无效",
     "invalid_report_date": "日期无效，请使用 YYYY-MM-DD",
     "report_not_found": "该日期尚无日报",
@@ -65,6 +69,18 @@ def attach_operation_routes(app: FastAPI, service: OperationService) -> None:
             background.add_task(service.execute, accepted.view.operation_id)
         return JSONResponse(accepted.view.model_dump(mode="json"),
                             status_code=202 if accepted.view.status == "running" else 200)
+
+    @app.post("/api/v1/deliveries")
+    async def deliver(request: Request, background: BackgroundTasks):
+        key = _identifier(request.headers.get("Idempotency-Key"))
+        try:
+            body = DeliveryRequest.model_validate(await request.json())
+        except ValueError:
+            raise OperationError(400, "invalid_request") from None
+        accepted = service.accept_delivery(body, key)
+        if accepted.is_new:
+            background.add_task(service.execute, accepted.view.operation_id, accepted.snapshot)
+        return JSONResponse(accepted.view.model_dump(mode="json"), status_code=202 if accepted.view.status == "running" else 200)
 
     @app.get("/api/v1/operations/current")
     def current():

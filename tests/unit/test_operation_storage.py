@@ -188,3 +188,42 @@ def test_store_failure_prevents_acceptance_before_business(tmp_path):
     with pytest.raises(sqlite3.Error):
         accept(store,str(uuid4()))
     assert path.read_bytes()==before
+
+
+def test_delivery_preparation_runs_only_after_replay_and_busy_checks(tmp_path):
+    import inspect
+    from smart_daily_report.shared.operation_storage import OperationConflict
+    store=new_store(tmp_path/'operations.sqlite3')
+    assert 'before_insert' in inspect.signature(store.accept).parameters, 'Transactional preparation is missing'
+    calls=[]
+    kwargs=dict(request_id=str(uuid4()),kind='delivery',report_date='2026-09-25',request_fingerprint='delivery-a',report_revision='a'*64,
+      sources={key:None for key in ('github_commits','lark_tasks','lark_messages')},
+      deliveries={'email':{'status':'pending','attempts':0,'error_code':None},'lark':{'status':'not_requested','attempts':0,'error_code':None}},
+      before_insert=lambda:calls.append('prepared'))
+    first,new=store.accept(**kwargs); assert new and calls==['prepared']
+    replay,new=store.accept(**kwargs); assert not new and replay==first and calls==['prepared']
+    with pytest.raises(OperationConflict): store.accept(**{**kwargs,'request_id':str(uuid4())})
+    assert calls==['prepared']
+
+
+@pytest.mark.parametrize('status',['accepted','partial_failure','unknown'])
+def test_delivery_guard_is_inside_acceptance_transaction(tmp_path,status):
+    from smart_daily_report.shared.operation_storage import OperationConflict
+    store=new_store(tmp_path/'operations.sqlite3')
+    sources={key:None for key in ('github_commits','lark_tasks','lark_messages')}
+    deliveries={'email':{'status':'pending','attempts':0,'error_code':None},'lark':{'status':'not_requested','attempts':0,'error_code':None}}
+    first,_=store.accept(str(uuid4()),'delivery','2026-09-25','first','a'*64,sources,deliveries)
+    terminal={**deliveries,'email':{'status':status,'attempts':1,'error_code':None}}
+    store.finish(first['operation_id'],status='succeeded',report_revision='a'*64,sources=sources,deliveries=terminal,error_code=None)
+    before=store.path.read_bytes()
+    with pytest.raises(OperationConflict,match='delivery_not_repeatable'):
+        store.accept(str(uuid4()),'delivery','2026-09-25','second','a'*64,sources,deliveries)
+    assert store.path.read_bytes()==before
+
+
+def test_failed_delivery_preparation_rolls_back_without_acceptance(tmp_path):
+    store=new_store(tmp_path/'operations.sqlite3')
+    before=store.path.read_bytes()
+    def fail(): raise ValueError('revision changed')
+    with pytest.raises(ValueError): store.accept(str(uuid4()),'delivery','2026-09-25','body','a'*64,{}, {},before_insert=fail)
+    assert store.path.read_bytes()==before and store.current() is None

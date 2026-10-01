@@ -115,7 +115,7 @@ def test_auth_and_cors_guard_every_control_route(tmp_path):
             raise AssertionError('Unauthorized request reached business service')
     path=tmp_path/'reports.sqlite3'
     app=create_app(path,operations=ForbiddenService(),operation_token='t'*32)
-    routes=[('POST','/api/v1/generations'),('GET','/api/v1/operations/current'),
+    routes=[('POST','/api/v1/generations'),('POST','/api/v1/deliveries'),('GET','/api/v1/operations/current'),
             ('GET','/api/v1/operations/96ff843b-f0c4-4c11-a23e-bd2d6e15c938'),
             ('GET','/api/v1/operations/by-key/96ff843b-f0c4-4c11-a23e-bd2d6e15c938'),
             ('GET','/api/v1/reports/2026-09-25/preview')]

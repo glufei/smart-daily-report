@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -12,11 +13,14 @@ import httpx
 
 from ..main import run_report
 from ..shared.models import DailyReport, RunConfig
+from ..shared.calendar import is_workday
+from ..notifier.email import send_email
+from ..notifier.lark_bot import send_lark_message
 from ..shared.errors import ConfigError
 from ..shared.operation_storage import OperationStore
 from ..shared.storage import get_report
 from .schemas import ReportView
-from .operation_schemas import GenerationRequest, OperationView, PreviewView
+from .operation_schemas import DeliveryRequest, GenerationRequest, OperationView, PreviewView
 
 
 def validate_operation_config(config: RunConfig, token: str) -> None:
@@ -48,6 +52,10 @@ class OperationError(Exception):
         super().__init__(code)
 
 
+class _DeliveryPersistenceError(Exception):
+    pass
+
+
 class OperationService:
     def __init__(self, config: RunConfig, store: OperationStore, *,
                  client_factory: Callable[[], httpx.Client] = httpx.Client, smtp_factory=None):
@@ -73,10 +81,36 @@ class OperationService:
         return AcceptedOperation(OperationView.model_validate_json(json.dumps(record)), is_new)
 
 
+    def accept_delivery(self, body: DeliveryRequest, request_id: str) -> AcceptedOperation:
+        snapshot = None
+        def prepare():
+            nonlocal snapshot
+            if not is_workday(body.report_date, self.config.holidays):
+                raise OperationError(400, "non_workday")
+            enabled = {"email": bool(self.config.smtp.host), "lark": bool(self.config.lark_webhook)}
+            if any(not enabled[name] for name in body.channels):
+                raise OperationError(400, "channel_not_configured")
+            snapshot, _ = self._read_report(body.report_date)
+            if report_revision(snapshot) != body.report_revision:
+                raise OperationError(409, "report_revision_changed")
+        fingerprint = json.dumps({"kind": "delivery", **body.model_dump(mode="json")}, sort_keys=True, separators=(",", ":"))
+        sources = {name: None for name in ("github_commits", "lark_tasks", "lark_messages")}
+        deliveries = {name: {"status": "pending" if name in body.channels else "not_requested", "attempts": 0, "error_code": None}
+                      for name in ("email", "lark")}
+        record, is_new = self.store.accept(request_id, "delivery", body.report_date.isoformat(), fingerprint,
+                                          body.report_revision, sources, deliveries, before_insert=prepare)
+        return AcceptedOperation(OperationView.model_validate_json(json.dumps(record)), is_new, snapshot)
+
+
     def execute(self, operation_id: str, snapshot: DailyReport | None = None) -> None:
         record = self.store.get(operation_id)
         if record is None:
             raise KeyError(operation_id)
+        if record["status"] != "running":
+            return
+        if record["kind"] == "delivery":
+            self._execute_delivery(record, snapshot)
+            return
         try:
             with self.client_factory() as client:
                 result = run_report(self.config, date.fromisoformat(record["report_date"]), dry_run=True,
@@ -102,7 +136,58 @@ class OperationService:
                               sources=record["sources"], deliveries=record["deliveries"], error_code="internal_error")
 
 
-    def preview(self, report_date: date) -> PreviewView:
+    def _execute_delivery(self, record: dict, snapshot: DailyReport | None) -> None:
+        outcomes = record["deliveries"]
+        codes = {"rejected": "delivery_rejected", "partial_failure": "delivery_partial", "unknown": "delivery_unknown"}
+        try:
+            try:
+                with self.client_factory() as client:
+                    for channel, outcome in outcomes.items():
+                        if outcome["status"] != "pending":
+                            continue
+                        try:
+                            if snapshot is None:
+                                raise ValueError("Confirmed snapshot is missing")
+                            if channel == "email":
+                                result = send_email(snapshot, self.config.smtp.recipients, self.config.smtp,
+                                                    **({"smtp_factory": self.smtp_factory} if self.smtp_factory else {}))
+                            else:
+                                result = send_lark_message(snapshot, self.config.lark_webhook, client=client)
+                            status = result.outcome if result.outcome in ("accepted", "rejected", "partial_failure", "unknown") else "unknown"
+                            value = {"status": status, "attempts": result.attempts, "error_code": codes.get(status)}
+                        except Exception:
+                            value = {"status": "unknown", "attempts": 1, "error_code": "delivery_unknown"}
+                        self._record_delivery(record["operation_id"], channel, value)
+                        outcomes[channel] = value
+            except _DeliveryPersistenceError:
+                raise
+            except Exception:
+                for channel, outcome in outcomes.items():
+                    if outcome["status"] == "pending":
+                        value = {"status": "unknown", "attempts": outcome["attempts"], "error_code": "delivery_unknown"}
+                        self._record_delivery(record["operation_id"], channel, value)
+                        outcomes[channel] = value
+            selected = [item["status"] for item in outcomes.values() if item["status"] != "not_requested"]
+            if "unknown" in selected:
+                status, error = "unknown", "delivery_unknown"
+            elif all(item == "accepted" for item in selected):
+                status, error = "succeeded", None
+            elif "accepted" in selected or "partial_failure" in selected:
+                status, error = "partial_failure", "delivery_partial"
+            else:
+                status, error = "failed", "delivery_rejected"
+            self.store.finish(record["operation_id"], status=status, report_revision=record["report_revision"],
+                              sources=record["sources"], deliveries=outcomes, error_code=error)
+        except (_DeliveryPersistenceError, sqlite3.Error, OSError):
+            logging.getLogger("smart_daily_report").error("operation_result_persistence_failed", extra={"error_code": "operation_storage_failed"})
+
+    def _record_delivery(self, operation_id: str, channel: str, value: dict) -> None:
+        try:
+            self.store.record_delivery(operation_id, channel, value)
+        except (sqlite3.Error, OSError):
+            raise _DeliveryPersistenceError from None
+
+    def _read_report(self, report_date: date):
         try:
             report = get_report(Path(self.config.database_path), report_date)
         except (sqlite3.Error, OSError):
@@ -115,6 +200,10 @@ class OperationService:
             view = ReportView.model_validate(report)
         except (ValueError, TypeError, KeyError, AttributeError):
             raise OperationError(500, "invalid_report_data") from None
+        return report, view
+
+    def preview(self, report_date: date) -> PreviewView:
+        report, view = self._read_report(report_date)
         revision = report_revision(report)
         sources, previous = self.store.preview_metadata(report_date.isoformat(), revision)
         targets = {
