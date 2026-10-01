@@ -103,7 +103,7 @@ $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 
 必须注入 `DAILY_REPORT_WEB_TOKEN`（至少32字符、非空白的本项目操作令牌）；按配置注入 `DAILY_REPORT_GITHUB_TOKEN`、`DAILY_REPORT_LARK_APP_ID`、`DAILY_REPORT_LARK_APP_SECRET`、`DAILY_REPORT_LARK_WEBHOOK`、`DAILY_REPORT_SMTP_USERNAME`、`DAILY_REPORT_SMTP_PASSWORD`。实际变量名以 YAML 的 *_env 值为准；不要把值写入命令示例、浏览器 URL 或 VITE_*。程序不自动读取 .env。操作令牌必须通过自己安全保管的环境文件/进程注入，刷新页面后需重新输入。
 
-GitHub公共库可匿名但有限流；私有库需读取权限。飞书应用须获租户授权、可读目标清单及群消息，机器人须在固定目标群中可用。准确 scope 名称与租户数据权限需要在开放平台核对，目前尚未获得本轮证据。无需发送邮件时可省略/清空 smtp；配置了 smtp 时 host/sender/非空 recipients、1–65535端口和布尔互斥TLS必填；声明登录环境变量时用户名和密码必须成对存在且非空白，不静默转为匿名连接。数据库路径相对于启动工作目录，操作库位于同目录 `<日报库文件名>.operations.sqlite3`；不要删除操作库来“解除重发限制”。
+GitHub公共库可匿名但有限流；私有库需读取权限。飞书应用须获租户授权、可读目标清单及群消息，机器人须在固定目标群中可用。真实任务接口已确认要求 task:tasklist:read（或 write，本项目只需 read）；开通、发布/审批和清单数据访问仍需核对，见 [具体权限步骤](feishu-tasklist-permissions.md)。无需发送邮件时可省略/清空 smtp；配置了 smtp 时 host/sender/非空 recipients、1–65535端口和布尔互斥TLS必填；声明登录环境变量时用户名和密码必须成对存在且非空白，不静默转为匿名连接。数据库路径相对于启动工作目录，操作库位于同目录 `<日报库文件名>.operations.sqlite3`；不要删除操作库来“解除重发限制”。
 
 ### 窗口 B：React 操作页面
 

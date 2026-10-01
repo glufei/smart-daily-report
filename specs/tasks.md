@@ -314,3 +314,5 @@ Task 14（历史基线） → Task 15（操作基础 + GitHub 生成预览）
 2026-10-01 Task18离线checkpoint：操作浏览器22、旧只读14通过；pytest260/94.61%，frontend95，npm ci/typecheck/build0。真实权限/日期/凭证/非空样本/双渠道实际收件仍未完成，用户准备配置中。Task18保持未完成，版本1.1.0；验收映射见 docs/frontend/v1.2-acceptance.md。
 
 2026-10-01 审查checkpoint：独立审查确认的断网后手动404恢复缺口已RED→GREEN修复，前端96、操作浏览器24、pytest260/94.61%及两模式build通过。独立审查本身因模型额度中断，无完整结论；真实联调配置/日期尚待用户准备，Task18和1.2.0仍不完成。
+
+2026-10-01 真实配置与审查恢复checkpoint：七项凭证和本地配置已核对；选定2026-09-30，真实GitHub/飞书Token/群消息读取和SMTP连接通过。任务清单明确缺task:tasklist:read，待用户开通并发布审批；生成/非空样本/双渠道实际收件未完成。完整独立审查已恢复，Critical0/Important2/Minor0；两项恢复/版本归属缺陷已RED→GREEN，前端99、pytest260/94.61%、类型/构建通过，浏览器结果见验收记录。Task18和版本提升保持未完成。
