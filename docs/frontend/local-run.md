@@ -88,6 +88,8 @@ React 19.3.0、React DOM 19.3.0、Vite 8.3.1、TypeScript 7.0.2、Zod 4.6.5；Vi
 
 Task15–17已实现。默认仍为只读；操作模式必须成对启动：后端 `--config`，前端 `VITE_API_MODE=operations`。产品不导入 fixture，不会用预制成功数据替代失败响应。当前变更在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`，main 尚未合并；本机 Python 依赖环境复用 `E:\MyCode\smart-daily-report\.runtime\venv`，因此以下工作区命令明确设置 PYTHONPATH，避免意外导入 main 的旧代码。
 
+详细填写步骤见 [163邮箱、GitHub与飞书配置指南](v1.2-configuration-163-feishu.md)。
+
 ### 窗口 A：配置与真实后端
 
 在工作区放置被忽略的 config.yaml，按 config.yaml.example 设置真实来源、成员映射、固定目标及凭证环境变量名。现有配置中旧 `lark_task_search_path: /task/v2/tasks/search` 必须迁为 `/task/v2/tasklists/{tasklist_guid}/tasks`；`lark_project_ids` 填已授权 tasklist GUID。任务按 completed_at 和团队时区展示所选日期完成的记录，不代表任意历史状态变更。

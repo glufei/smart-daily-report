@@ -10,7 +10,7 @@
 
 启动真实操作：在该工作区根目录设置 `PYTHONPATH=src` 并注入本机操作令牌及 YAML 指定的后端凭证，再用本机Python环境执行 `-m smart_daily_report.web.main --config config.yaml`；另一个窗口在该工作区frontend设置 `VITE_API_MODE=operations` 后 `npm run dev`。浏览器输入本项目操作令牌，先生成预览，再单独确认推送。不会自动读取.env；准确命令、旧飞书任务配置迁移、fixture和异常处理见 [完整启动说明](docs/frontend/local-run.md#v12-真实操作模式开发验收待完成)。
 
-[本轮验收与未完成项](docs/frontend/v1.2-acceptance.md) · [TDD记录](docs/frontend/v1.2-tdd-log.md) · [上游契约依据](docs/frontend/v1.2-upstream-contracts.md)。此前v1.0收件与v1.1的fixture测试保留为历史证据，不代替v1.2真实验收。
+[163邮箱与飞书逐步配置](docs/frontend/v1.2-configuration-163-feishu.md) · [本轮验收与未完成项](docs/frontend/v1.2-acceptance.md) · [TDD记录](docs/frontend/v1.2-tdd-log.md) · [上游契约依据](docs/frontend/v1.2-upstream-contracts.md)。此前v1.0收件与v1.1的fixture测试保留为历史证据，不代替v1.2真实验收。
 
 ## ✨ 核心工程亮点：规范先于代码
 
