@@ -54,11 +54,12 @@ def check_dependencies(config: RunConfig, client: httpx.Client) -> HealthCheckRe
                 checks["lark_token"] = False
     if config.lark_webhook:
         checks["lark_webhook_configured"] = True
-    try:
-        connection_factory = smtplib.SMTP_SSL if config.smtp.use_ssl else smtplib.SMTP
-        with connection_factory(config.smtp.host, config.smtp.port, timeout=3) as smtp:
-            smtp.noop()
-        checks["smtp"] = True
-    except (OSError, smtplib.SMTPException):
-        checks["smtp"] = False
+    if config.smtp.host:
+        try:
+            connection_factory = smtplib.SMTP_SSL if config.smtp.use_ssl else smtplib.SMTP
+            with connection_factory(config.smtp.host, config.smtp.port, timeout=3) as smtp:
+                smtp.noop()
+            checks["smtp"] = True
+        except (OSError, smtplib.SMTPException):
+            checks["smtp"] = False
     return HealthCheckResult(all(checks.values()), checks, None if all(checks.values()) else "One or more dependency checks failed")

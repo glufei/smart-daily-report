@@ -114,7 +114,7 @@ def test_config_rejects_missing_file_and_missing_member(tmp_path):
 
 def test_config_rejects_duplicate_member_id(tmp_path):
     path = tmp_path / "bad.yaml"
-    path.write_text("""team: {name: team, timezone: UTC, smtp: {host: smtp, sender: a, recipients: []}}
+    path.write_text("""team: {name: team, timezone: UTC, smtp: {host: smtp, sender: a, recipients: [lead@test]}}
 members:
   - {member_id: m, display_name: M}
   - {member_id: m, display_name: M2}
@@ -152,3 +152,19 @@ def test_storage_does_not_store_secret_when_message_filtered(config, records, tm
     path = tmp_path / "daily.sqlite"
     write_report(path, report)
     assert "secret-marker" not in get_report(path, report.report_date).markdown
+
+
+def test_smtp_block_absent_disables_email_but_partial_block_is_error(tmp_path):
+    path = tmp_path / "config.yaml"
+    base = {"team": {"name": "team", "timezone": "UTC"}, "members": [{"member_id": "m", "display_name": "M"}]}
+    path.write_text(json.dumps(base), encoding="utf-8")
+    try:
+        cfg = load_config(path, {})
+    except ConfigError:
+        cfg = None
+    assert cfg is not None, "Generation without SMTP must remain available"
+    assert cfg.smtp.host == "" and cfg.smtp.recipients == []
+    for partial in ({"host":"smtp.test"}, {"host":"smtp.test","sender":"a@test","recipients":[]}):
+        path.write_text(json.dumps({**base,"team":{**base["team"],"smtp":partial}}), encoding="utf-8")
+        with pytest.raises(ConfigError):
+            load_config(path, {})

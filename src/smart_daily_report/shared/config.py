@@ -58,18 +58,24 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
     holidays = set()
     try:
         holidays = {date.fromisoformat(value) for value in team.get("holidays", [])}
-        smtp = SmtpConfig(
-            host=_required(smtp_raw, "host", "team.smtp"),
-            port=int(smtp_raw.get("port", 587)),
-            username=_env(smtp_raw, "username_env", env),
-            password=_env(smtp_raw, "password_env", env),
-            sender=_required(smtp_raw, "sender", "team.smtp"),
-            recipients=list(smtp_raw.get("recipients", [])),
-            starttls=bool(smtp_raw.get("starttls", True)),
-            use_ssl=bool(smtp_raw.get("use_ssl", False)),
-        )
-        if smtp.starttls and smtp.use_ssl:
-            raise ConfigError("SMTP starttls and use_ssl cannot both be enabled")
+        if smtp_raw:
+            recipients = smtp_raw.get("recipients")
+            if not isinstance(recipients, list) or not recipients or not all(isinstance(value, str) and value.strip() for value in recipients):
+                raise ConfigError("SMTP requires non-empty recipients")
+            smtp = SmtpConfig(
+                host=_required(smtp_raw, "host", "team.smtp"),
+                port=int(smtp_raw.get("port", 587)),
+                username=_env(smtp_raw, "username_env", env),
+                password=_env(smtp_raw, "password_env", env),
+                sender=_required(smtp_raw, "sender", "team.smtp"),
+                recipients=list(smtp_raw.get("recipients", [])),
+                starttls=bool(smtp_raw.get("starttls", True)),
+                use_ssl=bool(smtp_raw.get("use_ssl", False)),
+            )
+            if smtp.starttls and smtp.use_ssl:
+                raise ConfigError("SMTP starttls and use_ssl cannot both be enabled")
+        else:
+            smtp = SmtpConfig("", 587, None, None, "", [])
         config = RunConfig(
             team_name=_required(team, "name", "team"), timezone=timezone,
             members=members,

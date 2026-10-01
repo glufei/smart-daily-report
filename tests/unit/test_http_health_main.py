@@ -137,7 +137,7 @@ def test_main_returns_error_for_missing_config(tmp_path):
 
 def test_main_check_and_run_exit_codes(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("""team: {name: team, timezone: UTC, smtp: {host: smtp, sender: a, recipients: []}}
+    config_path.write_text("""team: {name: team, timezone: UTC, smtp: {host: smtp, sender: a, recipients: [lead@test]}}
 members:
   - {member_id: m, display_name: M}
 """, encoding="utf-8")
@@ -209,3 +209,17 @@ def test_failed_sources_are_available_without_creating_report(config, tmp_path):
     assert set(source_results) == {"github_commits"}
     assert source_results["github_commits"].status == "failure"
     assert result.error_code == "all_sources_failed"
+
+
+def test_disabled_smtp_health_check_never_connects(config, monkeypatch):
+    from dataclasses import replace
+    calls = []
+    def forbidden_connect(*args, **kwargs):
+        calls.append(args)
+        raise OSError("SMTP is disabled")
+    cfg = replace(config, smtp=replace(config.smtp, host="", sender="", recipients=[]))
+    monkeypatch.setattr("smart_daily_report.shared.health.smtplib.SMTP", forbidden_connect)
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        result = check_dependencies(cfg, client)
+    assert calls == [], "A disabled channel must not open a connection"
+    assert result.success and "smtp" not in result.checks
