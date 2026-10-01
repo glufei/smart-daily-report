@@ -146,3 +146,16 @@ members:
 ```
 
 真实 Token、密码和 Webhook 通过环境变量注入。成员外部账号映射必须全局唯一。
+
+## v1.2 Web 操作适配增量（已确认，尚未实现）
+
+- HTTP 接口、受保护 DTO、幂等和中断语义以 [`web-operations.md`](web-operations.md) 为准；操作层复用 Collector/Generator/Notifier，不让浏览器直接调用这些内部函数。
+- `run_report(config, report_date, dry_run=True, ...) -> RunResult` 保留签名和现有注入方式。RunResult 兼容增加 `sources: dict[str, CollectResult]`（默认空），交接已启用来源的原始成功/失败结果；禁用由 RunConfig 确定。API 仅投影状态/安全错误码，不返回 records/message 或秘密。
+- 修正全失败判断：只计算已启用来源；无已启用来源是配置错误，全部已启用来源失败不生成/写历史，不被禁用来源的兼容 success 状态掩盖。非工作日仍在采集前跳过。
+- 飞书任务签名及 `RunConfig.lark_project_ids`/`lark_task_search_path` 字段名保留兼容；project_ids 实际为已授权 tasklist GUID，path 默认改为 `/task/v2/tasklists/{tasklist_guid}/tasks`。每个 GUID 替换路径模板后 GET，query 为 page_size=100/completed=true/user_id_type=open_id 及后续 page_token，无 JSON body，不设创建日期过滤。显式旧 search 路径在启动时拒绝并提示迁移，不能静默继续用 tenant Token 搜索。健康检查沿用同一清单 GET 契约。只投影 completed_at 落入 CollectionWindow 的 TaskSummary；返回与多负责人语义见 data-models.md。
+- 操作层的生成服务只调用 dry_run=True；推送服务先 `get_report()`、校验版本并捕获 DailyReport，然后分别调用 `send_email()` / `send_lark_message()`。严禁以 dry_run=False 的编排代替独立推送。
+- 保留 `DeliveryResult.success/attempts/error_code` 及旧调用方式，兼容增加可选 `outcome`（accepted/rejected/partial_failure/unknown）。新推送需明确提供 outcome；accepted 才令 success=True。旧调用未提供 outcome 时不能在 v1.2 操作界面无证据映射成 accepted；过渡映射与 CLI 测试在任务中明确验证。
+- SMTP 部分收件人拒绝、机器人新/旧业务码与不确定发送须在 Notifier 的最小增量中表达；可证明发送前未接受的暂时故障才重试，已提交后读超时/不可信响应不自动重发。单渠道异常仍不阻止另一渠道。
+- 配置校验按启用能力处理：整个 SMTP 配置块缺失/为空视为禁用邮件，不能阻止仅生成或飞书推送；提供了 SMTP 配置却缺少必需字段时启动失败，不静默禁用。配置了邮件则校验目标/TLS/凭证。对 CLI 无发送的调用保持可用，选择未启用渠道返回明确失败，不尝试连接空主机。
+- 前端 API 模块继续使用 fetch + Zod，复用旧 ReportView 类型；新 OperationView/PreviewView 按严格枚举解析。服务器错误正文不作为可执行 HTML 或不受控文案展示。
+- 具体服务函数拆分和文件归属在规范确认后的 Superpowers 实施计划中锁定；本节是兼容约束，不声称这些增量已经存在。

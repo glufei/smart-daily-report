@@ -26,15 +26,15 @@
 |---|---|---|
 | `record_id` | `str` | 飞书任务标识 |
 | `title` | `str` | 任务标题 |
-| `status` | `str` | 当日状态变更后的状态 |
+| `status` | `str` | v1.2 完成任务为 `completed`；旧历史状态值继续可读 |
 | `assignee_user_id` | `str \| None` | 飞书用户标识 |
-| `changed_at` | `datetime` | 状态变更时间 |
+| `changed_at` | `datetime` | v1.2 为来源 `completed_at` 转换的带时区完成时间；不使用普通更新时间替代 |
 | `url` | `str \| None` | 任务链接 |
 | `member_id` | `str \| None` | 映射后的内部成员 ID |
 | `status_from` | `str \| None` | 变更前状态（来源提供时） |
 | `status_to` | `str \| None` | 变更后状态；兼容书中状态迁移模型 |
 
-书中兼容别名：`assignee` 映射 `assignee_user_id`，`updated_at` 映射 `changed_at`。
+书中兼容属性名：`assignee` 映射 `assignee_user_id`，`updated_at` 返回 `changed_at`；属性名兼容不允许 Collector 以源 updated_at 推造完成事件。v1.2 保留结构与存储 schema；完成记录 `status_from=None / status_to='completed'`，不复原前态。多负责人逐人投影同一 guid，按 `(record_id, assignee_user_id)` 去重；无负责人保留未映射记录，成员归属仍由既有映射处理。清单摘要不含链接时 `url=None`。
 
 ## MessageRecord
 
