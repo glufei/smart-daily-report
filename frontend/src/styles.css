@@ -78,3 +78,12 @@ a:hover { color:var(--accent); }
 }
 @media (max-width:480px) { .topnav-sub { display:none; } }
 @media (prefers-reduced-motion:reduce) { .spinner { animation:none; } }
+
+.operation-panel { margin-block:20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px; overflow-wrap:anywhere; }
+.operation-panel > .input { min-width:0; flex:1 1 200px; }
+.operation-panel > p,.delivery-options { width:100%; min-width:0; }
+.delivery-options { display:flex; flex-direction:column; gap:12px; }
+.delivery-options label { display:flex; align-items:center; gap:8px; }
+.confirm-dialog { max-width:min(520px,calc(100vw - 32px)); padding:24px; border:1px solid var(--border); border-radius:12px; overflow-wrap:anywhere; }
+.confirm-dialog::backdrop { background:#0008; }
+.confirm-dialog > * + * { margin-top:12px; }

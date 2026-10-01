@@ -73,3 +73,8 @@ export function getCurrentOperation(token: string, signal: AbortSignal) {
 export function getPreview(date: string, token: string, signal: AbortSignal) {
   return request(`reports/${encodeURIComponent(date)}/preview`, token, signal, previewSchema.refine(value => value.report.report_date === date));
 }
+
+export function deliverReport(date: string, revision: string, channels: ('email' | 'lark')[], token: string, requestId: string, signal: AbortSignal) {
+  return request('deliveries', token, signal, operationSchema.refine(value => value.kind === 'delivery' && value.report_date === date
+    && value.request_id === requestId && value.report_revision === revision), { report_date: date, report_revision: revision, channels }, requestId);
+}

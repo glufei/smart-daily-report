@@ -92,14 +92,14 @@ export default function App() {
 
   return <>
     {![undefined, '', 'readonly', 'operations'].includes(import.meta.env.VITE_API_MODE) && <p role="alert">前端运行模式配置无效</p>}
-    <header className="topnav"><div className="container topnav-inner"><div className="brand"><h1 className="logo">智能日报</h1><span className="tag">只读</span></div><span className="topnav-sub">研发团队 · 日报查看</span></div></header>
+    <header className="topnav"><div className="container topnav-inner"><div className="brand"><h1 className="logo">智能日报</h1><span className="tag">{import.meta.env.VITE_API_MODE === 'operations' ? '采集与推送' : '只读'}</span></div><span className="topnav-sub">研发团队 · 日报查看</span></div></header>
     <main id="content"><section className="section"><div className="container"><form className="query-card" onSubmit={submit} noValidate>
       <div className="query-bar"><div className="field query-field"><label htmlFor="report-date">报告日期</label>
         <input id="report-date" type="date" className="input" value={date} onChange={event => { cancel(); setControlPreview(null); setDate(event.target.value); setView({ kind: 'initial' }); }} /></div>
         <button type="submit" className="btn btn-primary query-btn">查看日报</button></div>
       <p className="query-hint">选择日期，查看已生成并保存的日报。</p>
     </form></div></section>
-    {import.meta.env.VITE_API_MODE === 'operations' && <div className="container"><OperationPanel date={date} onPreview={onPreview} /></div>}
+    {import.meta.env.VITE_API_MODE === 'operations' && <div className="container"><OperationPanel date={date} onPreview={onPreview} preview={controlPreview} /></div>}
     <section className="result-section" aria-live="polite" aria-busy={view.kind === 'loading'}><div className="container">
       {controlPreview ? <ReportContent report={controlPreview.report} sources={controlPreview.sources} /> : view.kind === 'report' ? <ReportContent report={view.report} /> : <div className={`state-card ${view.kind === 'error' ? 'state-card-error' : ''}`} role={view.kind === 'error' ? 'alert' : 'status'}>
         {view.kind === 'initial' && <><span className="state-icon" aria-hidden="true">▦</span><h2>选择日期查看日报</h2><p>请选择报告日期并点击“查看日报”，加载当日的团队日报。</p></>}
@@ -108,6 +108,6 @@ export default function App() {
         {view.kind === 'error' && <><span className="state-icon" aria-hidden="true">!</span><h2>查询失败</h2><p>{view.message}</p><button type="button" className="btn btn-accent-outline" onClick={() => void query()}>重新查询</button></>}
       </div>}
     </div></section></main>
-    <footer className="pagefoot"><div className="container"><strong>智能日报 · 只读查看</strong><span className="meta">查看已保存的团队日报</span></div></footer>
+    <footer className="pagefoot"><div className="container"><strong>智能日报 · {import.meta.env.VITE_API_MODE === 'operations' ? '预览后确认推送' : '只读查看'}</strong><span className="meta">查看已保存的团队日报</span></div></footer>
   </>;
 }

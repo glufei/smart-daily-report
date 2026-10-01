@@ -79,3 +79,15 @@ test('malformed_error_body_and_mixed_delivery_source_evidence_are_invalid', asyn
   expect(client.operationSchema.safeParse({ ...operationFixture(), kind: 'delivery' }).success).toBe(false);
   expect(client.operationSchema.safeParse({ ...operationFixture(), kind: 'delivery', sources: { github_commits: null, lark_tasks: null, lark_messages: null } }).success).toBe(true);
 });
+
+
+test('delivery_post_contains_only_confirmed_date_revision_channels_and_original_key', async () => {
+  const client = await api(); expect(client.deliverReport, 'Confirmed delivery client is missing').toBeTypeOf('function');
+  const value = { ...operationFixture(), kind: 'delivery', report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
+  const fetchMock = vi.fn().mockResolvedValue(response(value, 202)); vi.stubGlobal('fetch', fetchMock);
+  const result = await client.deliverReport('2026-09-25', 'a'.repeat(64), ['email','lark'], 'private-token', value.request_id, new AbortController().signal);
+  expect(result.kind).toBe('delivery'); expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock.mock.calls[0][0]).toBe('http://127.0.0.1:8000/api/v1/deliveries');
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ report_date: '2026-09-25', report_revision: 'a'.repeat(64), channels: ['email','lark'] });
+  expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer private-token');
+});
