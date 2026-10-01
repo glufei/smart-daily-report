@@ -315,3 +315,43 @@ def test_operation_startup_supports_new_database_directory(config,tmp_path):
     except Exception: service=None
     assert service is not None, 'New operation directory cannot initialize'
     assert store.path.exists() and not database.exists()
+
+
+def test_sensitive_message_never_reaches_saved_preview(config,tmp_path,caplog):
+    from pathlib import Path
+    marker='sensitive-private-marker'
+    config=replace(config,lark_project_ids=['list-1'],lark_chat_ids=['chat'],lark_app_id='app',lark_app_secret='secret',
+      sensitive_keywords=[marker])
+    requests=[]
+    def handler(request):
+        requests.append(request)
+        if 'tenant_access_token' in request.url.path: return httpx.Response(200,json={'code':0,'tenant_access_token':'tenant-token'})
+        if '/tasklists/' in request.url.path: return httpx.Response(200,json={'code':0,'data':{'items':[{'guid':'task-1','summary':'Ship actual task',
+          'completed_at':1790301600000,'members':[{'id':'ou_1','type':'user','role':'assignee'}]}],'has_more':False}})
+        if request.url.path.endswith('/messages'): return httpx.Response(200,json={'code':0,'data':{'items':[
+          {'message_id':'safe','body':{'content':'{"text":"日报 done"}'},'sender':{'id':'ou_1'},'create_time':'2026-09-25T02:00:00Z'},
+          {'message_id':'secret','body':{'content':'{"text":"日报 '+marker+'"}'},'sender':{'id':'ou_1'},'create_time':'2026-09-25T02:00:00Z'}],'has_more':False}})
+        return httpx.Response(200,json=[])
+    service,store,cfg=make_service(config,tmp_path,handler)
+    accepted=service.accept_generation(GenerationRequest(report_date=date(2026,9,25)),str(uuid4())); service.execute(accepted.view.operation_id)
+    view=service.preview(date(2026,9,25))
+    assert store.get(accepted.view.operation_id)['status']=='succeeded'
+    assert view.report.members[0].tasks[0].status=='completed'
+    assert view.report.members[0].tasks[0].status_from is None
+    assert [r.content for r in view.report.members[0].messages]==['日报 done']
+    assert marker not in view.model_dump_json()+caplog.text
+    assert marker.encode() not in Path(cfg.database_path).read_bytes()+store.path.read_bytes()
+    assert sum('/tasklists/' in r.url.path for r in requests)==1
+
+
+def test_repeated_business_auth_denial_projects_auth_failure(config,tmp_path):
+    cfg=replace(config,lark_project_ids=['list-1'],lark_app_id='app',lark_app_secret='secret')
+    def handler(request):
+        if 'tenant_access_token' in request.url.path: return httpx.Response(200,json={'code':0,'tenant_access_token':'token'})
+        if '/tasklists/' in request.url.path: return httpx.Response(200,json={'code':99991663,'msg':'private-marker'})
+        return httpx.Response(200,json=[])
+    service,store,cfg=make_service(cfg,tmp_path,handler)
+    accepted=service.accept_generation(GenerationRequest(report_date=date(2026,9,25)),str(uuid4())); service.execute(accepted.view.operation_id)
+    result=store.get(accepted.view.operation_id)
+    assert result['status']=='partial_failure'
+    assert result['sources']['lark_tasks']['error_code']=='source_auth_failed'

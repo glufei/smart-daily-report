@@ -68,8 +68,8 @@ def test_pipeline_collects_generates_stores_and_delivers_both_channels(config, t
             return httpx.Response(200, json=[{"sha": "sha", "commit": {"message": "fix", "author": {"name": "A", "date": "2026-09-25T02:00:00Z"}}, "author": {"login": "octo"}, "html_url": "https://git/sha", "stats": {"additions": 4, "deletions": 2, "total": 3}}])
         if request.url.path.endswith("/auth/v3/tenant_access_token/internal"):
             return httpx.Response(200, json={"tenant_access_token": "lark-token"})
-        if request.url.path.endswith("/task/v2/tasks/search"):
-            return httpx.Response(200, json={"code": 0, "data": {"items": [{"guid": "task", "summary": "Ship", "status": "done", "assignee": {"id": "ou_1"}, "updated_time": "2026-09-25T02:00:00Z"}]}})
+        if request.url.path.endswith("/task/v2/tasklists/project/tasks"):
+            return httpx.Response(200, json={"code": 0, "data": {"items": [{"guid": "task", "summary": "Ship", "completed_at": 1790301600000, "members": [{"id": "ou_1", "type": "user", "role": "assignee"}]}], "has_more": False}})
         if request.url.path.endswith("/im/v1/messages"):
             return httpx.Response(200, json={"code": 0, "data": {"items": [{"message_id": "msg", "body": {"content": "{\"text\":\"日报 done\"}"}, "sender": {"id": "ou_1"}, "create_time": "2026-09-25T02:00:00Z"}]}})
         if request.url.path.endswith("/key"):

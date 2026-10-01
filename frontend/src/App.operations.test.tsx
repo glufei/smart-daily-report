@@ -265,3 +265,12 @@ test('restored_delivery_is_observed_without_starting_generation_or_delivery', as
   const fetchMock = vi.fn().mockResolvedValue(response(value)); setup(fetchMock); await screen.findByText('正在推送日报…');
   expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled(); expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
 });
+
+
+test('completed_task_shows_real_completion_without_invented_previous_status', async () => {
+  const preview = previewFixture(); preview.sources.lark_tasks.status = 'success';
+  const task = preview.report.members[0].tasks[0]; task.status = 'completed'; task.status_from = null; task.status_to = 'completed';
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValue(response(preview)); setup(fetchMock);
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  expect(screen.queryByText(/— →/)).not.toBeInTheDocument(); expect(screen.getByText('完成页面契约评审（已完成）')).toBeInTheDocument();
+});

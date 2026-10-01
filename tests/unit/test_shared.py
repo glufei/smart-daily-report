@@ -168,3 +168,14 @@ def test_smtp_block_absent_disables_email_but_partial_block_is_error(tmp_path):
         path.write_text(json.dumps({**base,"team":{**base["team"],"smtp":partial}}), encoding="utf-8")
         with pytest.raises(ConfigError):
             load_config(path, {})
+
+
+def test_task_config_migrates_default_and_rejects_explicit_search(tmp_path):
+    path=tmp_path/'config.yaml'
+    base='team:\n  name: team\n  timezone: Asia/Shanghai\n  lark_project_ids: [list-1]\n{extra}members:\n  - member_id: m\n    display_name: M\n'
+    path.write_text(base.format(extra=''),encoding='utf-8')
+    assert load_config(path,{}).lark_task_search_path=='/task/v2/tasklists/{tasklist_guid}/tasks'
+    path.write_text(base.format(extra='  lark_task_search_path: /task/v2/tasks/search\n'),encoding='utf-8')
+    with pytest.raises(ConfigError): load_config(path,{})
+    path.write_text(base.replace('[list-1]','[]').format(extra='  lark_task_search_path: /task/v2/tasks/search\n'),encoding='utf-8')
+    assert load_config(path,{}).lark_project_ids==[]

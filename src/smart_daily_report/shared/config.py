@@ -92,13 +92,15 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
             lark_app_id=_env(team, "lark_app_id_env", env),
             lark_app_secret=_env(team, "lark_app_secret_env", env),
             lark_webhook=_env(team, "lark_webhook_env", env),
-            lark_task_search_path=str(team.get("lark_task_search_path", "/task/v2/tasks/search")),
+            lark_task_search_path=str(team.get("lark_task_search_path", "/task/v2/tasklists/{tasklist_guid}/tasks")),
             lark_message_path=str(team.get("lark_message_path", "/im/v1/messages")),
             lark_token_path=str(team.get("lark_token_path", "/auth/v3/tenant_access_token/internal")),
             smtp=smtp,
         )
     except (TypeError, ValueError) as exc:
         raise ConfigError("Configuration contains invalid field values") from exc
+    if config.lark_project_ids and config.lark_task_search_path != "/task/v2/tasklists/{tasklist_guid}/tasks":
+        raise ConfigError("Enabled tasks require the authorized tasklist GET path; migrate the old search configuration")
     validate_identity_mappings(config)
     return config
 

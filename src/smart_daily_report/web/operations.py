@@ -85,7 +85,7 @@ class OperationService:
             for name, outcome in result.sources.items():
                 error = None
                 if outcome.status == "failure":
-                    error = "source_auth_failed" if outcome.error_code in ("http_401", "http_403", "missing_credentials") else "source_payload_invalid" if outcome.error_code == "invalid_payload" else "source_unavailable"
+                    error = "source_auth_failed" if outcome.error_code in ("http_401", "http_403", "missing_credentials", "lark_99991663", "lark_99991664") else "source_payload_invalid" if outcome.error_code == "invalid_payload" else "source_unavailable"
                 sources[name] = {"status": outcome.status, "error_code": error}
             if result.skipped:
                 status, error = "skipped", "non_workday"

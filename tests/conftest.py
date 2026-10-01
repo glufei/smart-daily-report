@@ -18,7 +18,7 @@ def config():
         database_path="reports.sqlite3", github_api_base_url="https://api.github.com",
         lark_api_base_url="https://open.feishu.cn/open-apis", github_token=None,
         lark_app_id=None, lark_app_secret=None, lark_webhook=None,
-        lark_task_search_path="/task/v2/tasks/search", lark_message_path="/im/v1/messages",
+        lark_task_search_path="/task/v2/tasklists/{tasklist_guid}/tasks", lark_message_path="/im/v1/messages",
         lark_token_path="/auth/v3/tenant_access_token/internal",
         smtp=SmtpConfig("smtp.test", 587, None, None, "reports@test", ["lead@test"]),
     )

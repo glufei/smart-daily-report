@@ -5,6 +5,7 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 
 from .http import TokenProvider
+from urllib.parse import quote
 from .models import HealthCheckResult, RunConfig
 
 
@@ -37,8 +38,8 @@ def check_dependencies(config: RunConfig, client: httpx.Client) -> HealthCheckRe
                 checks["lark_token"] = True
                 headers = {"Authorization": f"Bearer {token}"}
                 for index, project_id in enumerate(config.lark_project_ids):
-                    response = client.post(config.lark_api_base_url.rstrip("/") + "/" + config.lark_task_search_path.lstrip("/"),
-                                           json={"page_size": 1, "tasklist_guid": project_id}, headers=headers, timeout=5)
+                    response = client.get(config.lark_api_base_url.rstrip("/") + "/" + config.lark_task_search_path.replace("{tasklist_guid}", quote(project_id, safe="")).lstrip("/"),
+                                          params={"page_size": "1", "completed": "true", "user_id_type": "open_id"}, headers=headers, timeout=5)
                     payload = response.json() if response.is_success else {}
                     checks[f"lark_tasks_{index + 1}"] = response.is_success and payload.get("code", 0) == 0
                 now = datetime.now(timezone.utc)

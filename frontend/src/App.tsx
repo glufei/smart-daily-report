@@ -40,8 +40,8 @@ function ReportContent({ report, sources: outcomes }: { report: Report; sources?
             <small>{record.committed_at} · +{record.additions} / −{record.deletions} · {record.files_changed} 个文件</small></li>)}
         </Section>
         <Section title="任务进展" status={status('lark_tasks')} empty={member.tasks.length === 0}>
-          {member.tasks.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.title}（{record.status}）</RecordLink>
-            <small>{record.changed_at}{record.status_from !== null || record.status_to !== null ? ` · ${record.status_from ?? '—'} → ${record.status_to ?? '—'}` : ''}</small></li>)}
+          {member.tasks.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.title}（{record.status === 'completed' ? '已完成' : record.status}）</RecordLink>
+            <small>{record.changed_at}{record.status_from !== null && record.status_to !== null ? ` · ${record.status_from} → ${record.status_to}` : ''}</small></li>)}
         </Section>
         <Section title="协作沟通" status={status('lark_messages')} empty={member.messages.length === 0}>
           {member.messages.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.content}</RecordLink><small>{record.sent_at}{record.chat_name ? ` · ${record.chat_name}` : ''}</small></li>)}

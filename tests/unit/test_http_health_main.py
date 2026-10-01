@@ -99,9 +99,9 @@ def test_health_check_exercises_connected_github_lark_and_webhook(config, monkey
         def noop(self): return 250, b"OK"
     monkeypatch.setattr("smart_daily_report.shared.health.smtplib.SMTP", SMTP)
     def handler(request):
-        if request.url.path.endswith("/tasks/search"):
-            assert json.loads(request.content)["page_size"] == 1
-            assert "page_size" not in request.url.params
+        if request.url.path.endswith("/tasklists/p/tasks"):
+            assert request.method == "GET" and request.content == b""
+            assert request.url.params["page_size"] == "1"
         return httpx.Response(200, json={"tenant_access_token": "ok"} if "tenant_access_token" in request.url.path else {"resources": []})
     client = httpx.Client(transport=httpx.MockTransport(handler))
     result = check_dependencies(config, client)
@@ -223,3 +223,20 @@ def test_disabled_smtp_health_check_never_connects(config, monkeypatch):
         result = check_dependencies(cfg, client)
     assert calls == [], "A disabled channel must not open a connection"
     assert result.success and "smtp" not in result.checks
+
+
+def test_task_health_check_uses_same_get_contract(config):
+    from dataclasses import replace
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith('/token'): return httpx.Response(200,json={'code':0,'tenant_access_token':'token'})
+        return httpx.Response(200,json={'code':0,'data':{'items':[],'has_more':False}})
+    cfg=replace(config,lark_project_ids=['list-1'],lark_app_id='app',lark_app_secret='secret',lark_token_path='/token',
+      lark_task_search_path='/task/v2/tasklists/{tasklist_guid}/tasks',smtp=replace(config.smtp,host=''))
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client: result=check_dependencies(cfg,client)
+    task_request=calls[-1]
+    assert task_request.method=='GET'
+    assert task_request.url.path.endswith('/tasklists/list-1/tasks') and task_request.content==b''
+    assert dict(task_request.url.params)=={'page_size':'1','completed':'true','user_id_type':'open_id'}
+    assert result.success
