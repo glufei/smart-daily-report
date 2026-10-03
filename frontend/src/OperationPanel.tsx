@@ -17,6 +17,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const tokenInput = useRef<HTMLInputElement>(null);
   const work = useRef<{ id: number; controller?: AbortController; timer?: ReturnType<typeof setTimeout>; deadline?: ReturnType<typeof setTimeout> }>({ id: 0 });
   const locked = useRef(false);
   const pending = useRef<PendingRequest | null>(null);
@@ -85,6 +86,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     }
   }
   async function authenticate() {
+    if (!token.trim()) { setMessage('请输入操作令牌'); tokenInput.current?.focus(); return; }
     const ticket = begin(); setBusy(true); setCanRetry(false);
     try {
       const current = pending.current ? await getOperationByKey(pending.current.key, token, ticket.signal)
@@ -151,11 +153,14 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     partial_failure: '部分受理，不能整渠道重发', unknown: '结果未知，请核实，不能重发' };
   return <section className="query-card operation-panel" aria-label="日报操作">
     <label htmlFor="operation-token">操作令牌</label>
-    <input id="operation-token" className="input" type="password" autoComplete="off" value={token}
-      onChange={event => { stop(); setToken(event.target.value); setAuthenticated(false); setBusy(false); setConfirmation(null); }} />
-    <button type="button" className="btn btn-accent-outline" disabled={!token || busy} onClick={() => void authenticate()}>验证令牌</button>
+    <input ref={tokenInput} id="operation-token" className="input" type="password" autoComplete="off" value={token}
+      aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
+      onChange={event => { stop(); setToken(event.target.value); setAuthenticated(false); setBusy(false); setConfirmation(null); if (message === '请输入操作令牌') setMessage(''); }} />
+    <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void authenticate()}>验证令牌</button>
     <button type="button" className="btn btn-primary" disabled={!authenticated || !validDate(date) || busy || operation?.status === 'running' || !!pending.current}
+      aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
       onClick={() => void generate()}>采集并生成</button>
+    {!authenticated && <p id="operation-token-hint" className="query-hint">请先输入并验证操作令牌，验证成功后才能采集并生成。</p>}
     {authenticated && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void queryResult()}>查询执行结果</button>}
     {authenticated && canRetry && pending.current && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void submitRequest(pending.current!)}>重试原请求</button>}
     {authenticated && <button type="button" className="btn btn-accent-outline" disabled={!validDate(date) || busy || operation?.status === 'running'} onClick={() => void previewReport()}>预览日报</button>}

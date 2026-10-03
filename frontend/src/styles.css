@@ -81,6 +81,7 @@ a:hover { color:var(--accent); }
 
 .operation-panel { margin-block:20px; display:flex; flex-wrap:wrap; align-items:center; gap:12px; overflow-wrap:anywhere; }
 .operation-panel > .input { min-width:0; flex:1 1 200px; }
+.operation-panel .btn:disabled { opacity:.55; cursor:not-allowed; }
 .operation-panel > p,.delivery-options { width:100%; min-width:0; }
 .delivery-options { display:flex; flex-direction:column; gap:12px; }
 .delivery-options label { display:flex; align-items:center; gap:8px; }

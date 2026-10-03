@@ -6,7 +6,7 @@
 
 ## v1.2 开发 checkpoint
 
-已实现 React → 真实 FastAPI → GitHub/飞书采集 → SQLite预览，以及单独确认固定版本后SMTP/飞书推送。前端默认仍为只读，操作模式没有 Mock 成功回退。新代码在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`，未合并main或推送；2026-10-03已核对非空GitHub2条、飞书完成任务1条，并由用户确认本次邮件与飞书均收到、内容一致、无重复；9/26真实消息采集/过滤/映射通过，但该日是周末，本轮完整自动化回归已通过（pytest260、前端99、浏览器14+24、类型/构建及启动检查）；仍缺工作日消息在页面中的真实验收，版本保留1.1.0。
+已实现 React → 真实 FastAPI → GitHub/飞书采集 → SQLite预览，以及单独确认固定版本后SMTP/飞书推送。前端默认仍为只读，操作模式没有 Mock 成功回退。新代码在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`，未合并main或推送；2026-10-03已核对非空GitHub2条、飞书完成任务1条，并由用户确认本次邮件与飞书均收到、内容一致、无重复；9/26真实消息采集/过滤/映射通过，但该日是周末，本轮完整自动化回归已通过（pytest260、前端102、浏览器14+26、类型/构建及启动检查）；仍缺工作日消息在页面中的真实验收，版本保留1.1.0。
 
 启动真实操作：在该工作区根目录设置 `PYTHONPATH=src` 并注入本机操作令牌及 YAML 指定的后端凭证，再用本机Python环境执行 `-m smart_daily_report.web.main --config config.yaml`；另一个窗口在该工作区frontend设置 `VITE_API_MODE=operations` 后 `npm run dev`。浏览器输入本项目操作令牌，先生成预览，再单独确认推送。不会自动读取.env；准确命令、旧飞书任务配置迁移、fixture和异常处理见 [完整启动说明](docs/frontend/local-run.md#v12-真实操作模式开发验收待完成)。
 

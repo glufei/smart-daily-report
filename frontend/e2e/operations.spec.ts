@@ -159,3 +159,25 @@ test('manual_by_key_404_after_network_loss_recovers_same_request', async ({ page
   await page.getByRole('button',{name:'重试原请求',exact:true}).click(); await expect(page.getByText('日报生成完成，推送需单独确认')).toBeVisible();
   expect(posts).toBe(2); expect(keys[1]).toBe(keys[0]); expect(await counts()).toEqual(before);
 });
+
+
+test('empty_token_feedback_and_disabled_generation_are_clear', async ({ page }, info) => {
+  let apiRequests = 0;
+  page.on('request', request => { if (request.url().startsWith('http://127.0.0.1:8775/api/v1/')) apiRequests++; });
+  await page.goto('/');
+  const input = page.getByLabel('操作令牌', { exact: true });
+  const generation = page.getByRole('button', { name: '采集并生成', exact: true });
+  await expect(generation).toBeDisabled();
+  await expect(generation).toHaveAccessibleDescription(/请先输入并验证操作令牌/);
+  await expect(generation).toHaveCSS('cursor', 'not-allowed');
+  expect(await generation.evaluate(element => Number(getComputedStyle(element).opacity))).toBeLessThan(1);
+  await page.getByRole('button', { name: '验证令牌', exact: true }).click();
+  await expect(page.getByRole('region', { name: '日报操作' }).getByRole('status')).toContainText('请输入操作令牌');
+  await expect(input).toBeFocused();
+  await input.fill('   ');
+  await page.getByRole('button', { name: '验证令牌', exact: true }).click();
+  await expect(page.getByRole('region', { name: '日报操作' }).getByRole('status')).toContainText('请输入操作令牌');
+  await expect(input).toBeFocused();
+  expect(apiRequests).toBe(0);
+  await screenshot(page, info.project.name, 'token-required');
+});

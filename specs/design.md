@@ -71,7 +71,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 
 **CORS 与 Token**：沿用 loopback Host 与两个明确 Origin（127.0.0.1 的 5173/4173），操作模式允许 GET/POST/OPTIONS 与 Authorization/Content-Type/Idempotency-Key 头，不使用通配 Origin 或 Cookie。OPTIONS 预检不要求 Bearer，但无业务副作用；受保护路由逐次校验 `Authorization: Bearer <本项目操作令牌>`，使用 FastAPI HTTPBearer 与标准库安全比较。CORS 不是鉴权，无 Origin 的脚本请求也必须携带正确令牌。浏览器通过密码输入暂存令牌于内存，退出/刷新清空；绝不将上游 Token/SMTP 密码/Webhook 写入 VITE 环境变量、浏览器存储或 URL。[CORS 官方依据](https://fastapi.tiangolo.com/tutorial/cors/)。
 
-**页面模式**：公开非秘密配置 `VITE_API_MODE` 默认为 readonly；operations 才显示令牌输入、生成、预览与推送交互，并与后端 `--config` 配套。原双窗口启动不设置该变量，继续仅查看历史。进入操作模式并认证后 GET 当前/最近操作，运行中则恢复观察；前端刷新不清除服务端幂等/渠道记录。此模式开关不是鉴权，不能绕过后端 Token 校验。
+**页面模式**：公开非秘密配置 `VITE_API_MODE` 默认为 readonly；operations 才显示令牌输入、生成、预览与推送交互，并与后端 `--config` 配套。原双窗口启动不设置该变量，继续仅查看历史。进入操作模式并认证后 GET 当前/最近操作，运行中则恢复观察；前端刷新不清除服务端幂等/渠道记录。此模式开关不是鉴权，不能绕过后端 Token 校验。 空或全空格令牌的验证点击由前端本地反馈并聚焦输入框，不请求后端；未认证的生成按钮保持禁用，通过可见提示、aria-describedby与面板内禁用样式说明原因。输入修正后清除本地空值提示，服务端鉴权及原操作恢复逻辑沿用。
 
 **上游认证**：GitHub Token、飞书应用秘密、SMTP 授权码和机器人 Webhook 均复用服务器环境变量配置；后端向 GitHub/飞书传对应 Bearer，SMTP 使用 TLS 和服务器登录凭证。不同飞书接口的 Token 类型、权限和可访问资源必须按真实租户核对，不能仅凭能换取 tenant token 就声称任务接口可用；OAuth/用户登录系统不在本轮范围，若接口实际要求新的身份流程，先报告规范冲突。浏览器只调用本项目 FastAPI。
 

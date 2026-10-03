@@ -484,3 +484,33 @@ test('restored_delivery_results_stay_bound_to_original_version_after_same_date_u
   expect(within(results).getByText('本次邮件结果：服务商已受理')).toBeInTheDocument();
   expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
 });
+
+
+test.each(['', '   '])('blank_token_validation_guides_user_without_network_request (%j)', async value => {
+  const fetchMock = vi.fn().mockResolvedValue(response(null));
+  vi.stubEnv('VITE_API_MODE', 'operations'); vi.stubGlobal('fetch', fetchMock); render(<App />);
+  const input = screen.getByLabelText('操作令牌');
+  fireEvent.change(input, { target: { value } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '验证令牌' })); });
+  expect(fetchMock).not.toHaveBeenCalled();
+  const panel = within(screen.getByRole('region', { name: '日报操作' }));
+  expect(panel.getByRole('status')).toHaveTextContent(/请输入操作令牌/);
+  expect(input).toHaveFocus();
+  expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled();
+  fireEvent.change(input, { target: { value: 'not-yet-verified-token' } });
+  expect(panel.queryByText('请输入操作令牌')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled();
+});
+
+test('unauthenticated_generation_explains_disabled_action_without_request', () => {
+  const fetchMock = vi.fn();
+  vi.stubEnv('VITE_API_MODE', 'operations'); vi.stubGlobal('fetch', fetchMock); render(<App />);
+  const button = screen.getByRole('button', { name: '采集并生成' });
+  expect(button).toBeDisabled();
+  expect(button).toHaveAccessibleDescription(/请先输入并验证操作令牌/);
+  fireEvent.click(button);
+  fireEvent.change(screen.getByLabelText('操作令牌'), { target: { value: 'not-yet-verified-token' } });
+  expect(button).toBeDisabled();
+  expect(button).toHaveAccessibleDescription(/请先输入并验证操作令牌/);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
