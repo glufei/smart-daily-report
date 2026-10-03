@@ -6,7 +6,7 @@
 
 ## v1.2 开发 checkpoint
 
-已实现 React → 真实 FastAPI → GitHub/飞书采集 → SQLite预览，以及单独确认固定版本后SMTP/飞书推送。前端默认仍为只读，操作模式没有 Mock 成功回退。新代码在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`，未合并main或推送；完整真实平台/非空飞书任务/双渠道实际收件验收尚未完成，发布版本仍为1.1.0。
+已实现 React → 真实 FastAPI → GitHub/飞书采集 → SQLite预览，以及单独确认固定版本后SMTP/飞书推送。前端默认仍为只读，操作模式没有 Mock 成功回退。新代码在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`，未合并main或推送；2026-10-03已核对非空GitHub2条、飞书完成任务1条，并由用户确认本次邮件与飞书均收到、内容一致、无重复；9/26真实消息采集/过滤/映射通过，但该日是周末，仍缺工作日消息在页面中的验收及发布前完整验证，版本保留1.1.0。
 
 启动真实操作：在该工作区根目录设置 `PYTHONPATH=src` 并注入本机操作令牌及 YAML 指定的后端凭证，再用本机Python环境执行 `-m smart_daily_report.web.main --config config.yaml`；另一个窗口在该工作区frontend设置 `VITE_API_MODE=operations` 后 `npm run dev`。浏览器输入本项目操作令牌，先生成预览，再单独确认推送。不会自动读取.env；准确命令、旧飞书任务配置迁移、fixture和异常处理见 [完整启动说明](docs/frontend/local-run.md#v12-真实操作模式开发验收待完成)。
 
@@ -241,6 +241,6 @@ npm run test:e2e
 - 来源失败与正常零记录分开表示，避免错误地向收件人报告「今日无记录」。飞书消息先按工作关键词筛选，再排除命中敏感词的整条消息；未映射成员只记录计数告警，不把源内容误归给别人。
 - 日报中的外部文本在 HTML 中转义，链接仅允许 `http` / `https`。日志不记录 Token、Webhook、SMTP 密码或消息正文。
 - SQLite 是本机历史记录，不是备份服务；存储路径、文件访问权限和备份策略由部署环境管理。
-- 真实租户的「有任务」和「多页任务」响应尚需在出现相应数据后复核；现阶段这两类行为由 Mock 测试验证。
+- 真实租户的「有任务」已核对1条完成任务；尚无真实多页任务样本，该分页行为目前由离线测试验证。周末和配置假日不生成、不推送；不能用周末消息的采集层证据替代工作日消息的页面验收。
 
 详细需求、接口和验收依据请参阅 [`specs/`](specs/proposal.md)。
