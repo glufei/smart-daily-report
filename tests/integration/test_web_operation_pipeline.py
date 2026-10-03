@@ -612,3 +612,28 @@ def test_all_channels_explicitly_rejected_are_failed(config,tmp_path):
     result=store.get(accepted.view.operation_id)
     assert result['status']=='failed' and result['error_code']=='delivery_rejected'
     assert all(v['status']=='rejected' for v in result['deliveries'].values()) and len(sends)==1 and len(requests)==1
+
+
+def test_malformed_only_message_source_preserves_saved_report(config, tmp_path, statuses):
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from smart_daily_report.generator.formatter import generate_daily_report
+    from smart_daily_report.shared.storage import get_report, write_report
+    def handler(request):
+        if request.url.path.endswith('/tenant_access_token/internal'):
+            return httpx.Response(200, json={'code': 0, 'tenant_access_token': 'synthetic-token'})
+        return httpx.Response(200, json={'code': 0, 'data': {'has_more': False}})
+    service, store, cfg = make_service(config, tmp_path, handler)
+    service.config = replace(cfg, github_repositories=[], lark_chat_ids=['chat'], lark_app_id='app', lark_app_secret='synthetic-secret')
+    report_date = date(2026, 9, 25)
+    original = generate_daily_report(report_date, 'original team', [], statuses, datetime(2026, 9, 25, tzinfo=timezone.utc))
+    write_report(Path(cfg.database_path), original)
+    before = Path(cfg.database_path).read_bytes()
+    accepted = service.accept_generation(GenerationRequest(report_date=report_date), str(uuid4()))
+    service.execute(accepted.view.operation_id)
+    result = store.get(accepted.view.operation_id)
+    assert result['status'] == 'failed' and result['error_code'] == 'all_sources_failed'
+    assert result['sources']['lark_messages']['status'] == 'failure'
+    assert result['report_revision'] is None
+    assert Path(cfg.database_path).read_bytes() == before
+    assert get_report(Path(cfg.database_path), report_date) == original

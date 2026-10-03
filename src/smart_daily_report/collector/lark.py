@@ -22,8 +22,10 @@ def _dt(value) -> datetime:
 
 
 def _data_items(payload: dict) -> tuple[list[dict], str | None]:
-    data = payload.get("data", payload)
-    items = data.get("items", data.get("tasks", data.get("messages", [])))
+    data = payload["data"]
+    items = data["items"]
+    if not isinstance(items, list) or "has_more" in data and type(data["has_more"]) is not bool:
+        raise ValueError("Invalid message page")
     return items, data.get("page_token")
 
 
@@ -182,6 +184,6 @@ def collect_messages(client: httpx.Client, chat_ids: Sequence[str], window: Coll
                 if not isinstance(page_token, str) or not page_token or page_token in seen_tokens:
                     return CollectResult("lark_messages", "failure", error_code="invalid_pagination", message="Feishu message pagination failed", attempts=max(1, attempts_total))
                 seen_tokens.add(page_token)
-            except (ValueError, TypeError, AttributeError):
+            except (ValueError, TypeError, AttributeError, KeyError):
                 return CollectResult("lark_messages", "failure", error_code="invalid_payload", message="Feishu message response could not be parsed", attempts=max(1, attempts_total))
     return CollectResult("lark_messages", "success", records, attempts=max(1, attempts_total))

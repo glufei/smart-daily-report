@@ -98,7 +98,7 @@ def test_github_fetches_change_statistics_when_list_omits_them():
             return httpx.Response(200, json=[{"sha": "sha", "url": "https://api.test/detail", "commit": {
                 "message": "change", "author": {"name": "A", "date": "2026-09-25T01:00:00Z"}},
                 "author": {"login": "octo"}, "html_url": "https://git/sha"}])
-        return httpx.Response(200, json={"stats": {"additions": 7, "deletions": 2, "total": 4}, "files": [{}, {}, {}, {}]})
+        return httpx.Response(200, json={"stats": {"additions": 7, "deletions": 2, "total": 4}, "files": [{"filename": f"file-{i}.py"} for i in range(4)]})
     client = httpx.Client(transport=httpx.MockTransport(handler))
     window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
     result = collect_commits(client, ["acme/repo"], window, "https://api.test")
@@ -361,3 +361,111 @@ def test_lark_message_refresh_replays_once_even_when_second_auth_failure_changes
         result=collect_messages(client,['chat'],window,[],[],provider,'https://lark','/messages',sleep=lambda _:None)
     assert result.status=='failure' and result.records==[]
     assert len(message_calls)==2 and len(token_calls)==2
+
+
+@pytest.mark.parametrize("payload", [
+    {"code": 0},
+    {"code": 0, "data": {"has_more": False}},
+    {"code": 0, "data": {"items": None}},
+    {"code": 0, "data": {"items": {}}},
+    {"code": 0, "data": {"items": ""}},
+    {"code": 0, "data": {"items": [], "has_more": "false"}},
+])
+@pytest.mark.parametrize("after_first_page", [False, True])
+def test_malformed_message_page_cannot_claim_empty_or_complete_success(payload, after_first_page):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        if after_first_page and len(calls) == 1:
+            return httpx.Response(200, json={"code": 0, "data": {"items": [
+                {"message_id": "m", "content": "daily progress", "create_time": "2026-09-25T02:00:00Z"}
+            ], "has_more": True, "page_token": "next"}})
+        return httpx.Response(200, json=payload)
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = collect_messages(client, ["chat"], window, [], [], FakeToken(), "https://lark", "/messages")
+    assert result.status == "failure" and result.error_code == "invalid_payload"
+    assert result.records == []
+    assert len(calls) == (2 if after_first_page else 1)
+
+
+def github_detail_result(handler, waits):
+    def route(request):
+        if request.url.path.endswith('/commits'):
+            return httpx.Response(200, json=[{'sha': 'sha', 'url': 'https://api.test/detail', 'commit': {
+                'message': 'change', 'author': {'name': 'A', 'date': '2026-09-25T01:00:00Z'}},
+                'author': {'login': 'octo'}, 'html_url': 'https://git/sha'}])
+        return handler(request)
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    with httpx.Client(transport=httpx.MockTransport(route)) as client:
+        return collect_commits(client, ['acme/repo'], window, 'https://api.test', sleep=waits.append)
+
+
+@pytest.mark.parametrize('recovered', [True, False])
+def test_github_detail_rate_limit_uses_reset_retry_without_partial_success(recovered):
+    calls, waits = [], []
+    def handler(request):
+        calls.append(request)
+        if recovered and len(calls) == 2:
+            return httpx.Response(200, json={'stats': {'additions': 7, 'deletions': 2}, 'files': [{'filename': 'a.py'}]})
+        return httpx.Response(403, headers={'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1'})
+    result = github_detail_result(handler, waits)
+    assert len(calls) == 2 and waits == [0]
+    assert result.attempts == 3
+    if recovered:
+        assert result.status == 'success' and result.records[0].additions == 7
+    else:
+        assert result.status == 'failure' and result.error_code == 'http_403' and result.records == []
+
+
+@pytest.mark.parametrize('headers', [{}, {'X-RateLimit-Remaining': '1', 'X-RateLimit-Reset': '1'},
+    {'X-RateLimit-Remaining': '0'}, {'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': 'invalid'}])
+def test_github_detail_permission_or_unusable_reset_is_not_retried(headers):
+    calls, waits = [], []
+    result = github_detail_result(lambda request: (calls.append(request), httpx.Response(403, headers=headers))[1], waits)
+    assert result.status == 'failure' and result.error_code == 'http_403' and result.records == []
+    assert len(calls) == 1 and waits == []
+
+
+def test_github_detail_pages_count_unique_files_and_keep_commit_statistics():
+    calls, waits = [], []
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(200, json={'stats': {'additions': 9, 'deletions': 4},
+                'files': [{'filename': f'file-{i}.py'} for i in range(300)]},
+                headers={'Link': '<https://api.test/detail?page=2>; rel="next"'})
+        return httpx.Response(200, json={'stats': {'additions': 9, 'deletions': 4},
+            'files': [{'filename': 'file-299.py'}, {'filename': 'file-300.py'}]})
+    result = github_detail_result(handler, waits)
+    assert result.status == 'success' and result.records[0].files_changed == 301
+    assert result.records[0].additions == 9 and result.records[0].deletions == 4
+    assert len(calls) == 2 and calls[1].url.params['page'] == '2'
+
+
+@pytest.mark.parametrize('failure', ['http', 'missing_files', 'repeated_link'])
+def test_github_incomplete_detail_pages_fail_entire_source(failure):
+    calls, waits = [], []
+    link = {'Link': '<https://api.test/detail?page=2>; rel="next"'}
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(200, json={'stats': {'additions': 1, 'deletions': 0},
+                'files': [{'filename': 'a.py'}]}, headers=link)
+        if failure == 'http':
+            return httpx.Response(503)
+        if failure == 'missing_files':
+            return httpx.Response(200, json={'stats': {'additions': 1}})
+        return httpx.Response(200, json={'stats': {'additions': 1}, 'files': [{'filename': 'b.py'}]}, headers=link)
+    result = github_detail_result(handler, waits)
+    assert result.status == 'failure' and result.records == []
+    assert result.error_code == {'http': 'http_503', 'missing_files': 'invalid_payload', 'repeated_link': 'invalid_pagination'}[failure]
+    assert len(calls) == (4 if failure == 'http' else 2)
+
+
+def test_github_detail_at_upstream_file_cap_does_not_claim_complete_count():
+    result = github_detail_result(lambda request: httpx.Response(200, json={
+        'stats': {'additions': 3000, 'deletions': 0},
+        'files': [{'filename': f'file-{i}.py'} for i in range(3000)]}), [])
+    assert result.status == 'failure' and result.error_code == 'details_file_limit'
+    assert result.records == []

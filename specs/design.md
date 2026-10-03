@@ -149,7 +149,7 @@ v1.1 HTTP 响应是 `DailyReport` 的显式白名单投影，详见 `contracts/h
 ### 5.2 重试
 
 - 对连接错误、超时、HTTP 429、HTTP 5xx 按固定上限重试；默认最多 3 次总请求（首次 + 最多 2 次重试），退避间隔有上限并尊重服务器 `Retry-After`。
-- GitHub 403 仅在响应明确表明 rate limit 且存在 reset 信息时等待到 reset 后重试；权限不足的 403 不重试。
+- GitHub列表、提交详情及详情后续页共用同一请求分类：403仅在remaining=0且reset可解析时执行一次有界等待/重放；等待最多30秒；权限403不重试，耗尽整个来源失败。
 - 飞书 Token 失效时通过 TokenProvider 刷新一次，原请求重放一次；Token 刷新路由本身不递归重试。
 - HTTP 4xx（限流与明确 Token 过期除外）不重试。重试耗尽后以来源失败结果返回。
 - 重试、等待与状态分类由代码实现；日志记录 attempt、来源、状态类别和耗时，不记录 Token 或消息正文。
@@ -197,3 +197,7 @@ v1.1 HTTP 响应是 `DailyReport` 的显式白名单投影，详见 `contracts/h
 4. 每项任务 GREEN 后运行全部 Python/前端测试，披露所有失败/警告；最终运行 typecheck/build/Playwright。Python 总业务覆盖率 ≥90%；新增/修改前端业务模块四项覆盖率分别 ≥90%，执行阶段核验并锁定与现有 Vitest 匹配的官方 coverage provider，不引入第二套 Jest 测试框架。
 5. 真实验收另行运行，不让 pytest/npm test 默认联机或发送。使用实际配置的工作日记录核对 GitHub、非空飞书任务与已过滤群消息；页面明确确认目标后发送日报，并分别核对邮件/群内收到。仅输出脱敏证据，真实日志和数据库不提交 Git。
 6. 旧版本、离线测试、真实接口受理、实际收件四类证据分别标明；真实数据或权限不可用就是未完成验收。缺陷先进入失败回归测试，再最小修复。完整命令与结果写入 `docs/frontend/v1.2-acceptance.md`。
+
+## 2026-10-03审查修复 checkpoint
+
+独立审查在ca326b6快照发现四项既有实现遗漏，均属于现有需求：消息页结构校验、GitHub详情限流、详情文件分页、Markdown外部文本转义。先失败测试后最小修复；复用httpx/既有重试与Markdown依赖，无新增服务、框架、日期例外或自动推送。具体完整性边界见interfaces契约；审查结论及全量证据见 [完成情况审查](../docs/frontend/v1.2-completion-audit.md)。工作日消息真实页面验收和正式发布仍未完成。
