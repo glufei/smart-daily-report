@@ -23,3 +23,17 @@ test('only web links may be opened and valid calendar dates queried', () => {
   for (const value of ['20260925', '2026-02-30', '2026-9-25', '0000-01-01']) expect(validDate(value)).toBe(false);
   expect(validDate('2026-09-25')).toBe(true);
 });
+
+
+test('records_from_failed_sources_are_rejected_for_every_source', () => {
+  for (const key of ['github_commits','lark_tasks','lark_messages'] as const) {
+    const report = reportFixture(); report.source_status[key] = 'failure'; expect(reportSchema.safeParse(report).success).toBe(false);
+  }
+});
+
+test.each([[403,'origin_not_allowed'],[405,'method_not_allowed'],[500,'internal_error'],[418,'private-code'],[404,'not-a-report'],[500,null]])('query HTTP %i is safely classified even when unsupported', async (status, code) => {
+  const body = code ? { error: { code, message: 'private-marker' } } : { private: 'private-marker' };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })));
+  const result = await queryReport('2026-09-25', new AbortController().signal);
+  expect(result.kind).toBe('error'); expect(JSON.stringify(result)).not.toContain('private-marker');
+});

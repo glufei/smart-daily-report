@@ -99,9 +99,9 @@ def test_health_check_exercises_connected_github_lark_and_webhook(config, monkey
         def noop(self): return 250, b"OK"
     monkeypatch.setattr("smart_daily_report.shared.health.smtplib.SMTP", SMTP)
     def handler(request):
-        if request.url.path.endswith("/tasks/search"):
-            assert json.loads(request.content)["page_size"] == 1
-            assert "page_size" not in request.url.params
+        if request.url.path.endswith("/tasklists/p/tasks"):
+            assert request.method == "GET" and request.content == b""
+            assert request.url.params["page_size"] == "1"
         return httpx.Response(200, json={"tenant_access_token": "ok"} if "tenant_access_token" in request.url.path else {"resources": []})
     client = httpx.Client(transport=httpx.MockTransport(handler))
     result = check_dependencies(config, client)
@@ -120,8 +120,9 @@ def test_health_check_handles_unreachable_services(config, monkeypatch):
 
 
 def test_run_report_dry_run_and_all_sources_failure(config, tmp_path):
-    config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite")})
-    result = run_report(config, date(2026, 9, 25), dry_run=True)
+    config = config.__class__(**{**config.__dict__, "github_repositories": ["acme/repo"], "database_path": str(tmp_path / "db.sqlite")})
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[])))
+    result = run_report(config, date(2026, 9, 25), dry_run=True, client=client)
     assert result.success and result.report is not None
     config = config.__class__(**{**config.__dict__, "github_repositories": ["a/b"], "github_token": "token",
                                  "lark_project_ids": ["project"], "lark_chat_ids": ["chat"]})
@@ -136,7 +137,7 @@ def test_main_returns_error_for_missing_config(tmp_path):
 
 def test_main_check_and_run_exit_codes(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("""team: {name: team, timezone: UTC, smtp: {host: smtp, sender: a, recipients: []}}
+    config_path.write_text("""team: {name: team, timezone: UTC, smtp: {host: smtp, sender: a, recipients: [lead@test]}}
 members:
   - {member_id: m, display_name: M}
 """, encoding="utf-8")
@@ -147,3 +148,95 @@ members:
     assert main(["--config", str(config_path), "--dry-run"]) == 0
     monkeypatch.setattr("smart_daily_report.main.run_report", lambda *args: RunResult(False))
     assert main(["--config", str(config_path)]) == 1
+
+
+def test_enabled_github_failure_cannot_be_hidden_by_disabled_sources(config, tmp_path):
+    from dataclasses import replace
+    database = tmp_path / "reports.sqlite3"
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client, sleep=lambda _: None)
+    assert result.success is False
+    assert result.error_code == "all_sources_failed"
+    assert result.report is None and not database.exists()
+
+
+def test_no_enabled_sources_does_not_create_history(config, tmp_path):
+    from dataclasses import replace
+    database = tmp_path / "reports.sqlite3"
+    cfg = replace(config, database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[]))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client)
+    assert result.success is False
+    assert result.error_code == "no_sources_configured"
+    assert result.report is None and not database.exists()
+
+
+def test_generation_sources_match_saved_report(config, tmp_path):
+    from dataclasses import replace
+    from pathlib import Path
+    from smart_daily_report.shared.storage import get_report
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(tmp_path / "reports.sqlite3"))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[]))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client)
+    source_results = getattr(result, "sources", None)
+    assert source_results is not None, "Web needs the actual enabled-source results"
+    assert set(source_results) == {"github_commits"}
+    assert source_results["github_commits"].status == "success"
+    assert result.success and result.deliveries == {}
+    assert get_report(Path(cfg.database_path), date(2026, 9, 25)).source_status["github_commits"] == source_results["github_commits"].status
+
+
+def test_non_workday_has_no_source_calls(config, tmp_path):
+    from dataclasses import replace
+    requests = []
+    database = tmp_path / "reports.sqlite3"
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: (requests.append(request), httpx.Response(403))[1])) as client:
+        result = run_report(cfg, date(2026, 9, 26), dry_run=True, client=client)
+    assert result.skipped and result.success
+    assert getattr(result, "sources", None) == {}
+    assert requests == [] and not database.exists()
+
+
+def test_failed_sources_are_available_without_creating_report(config, tmp_path):
+    from dataclasses import replace
+    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(tmp_path / "reports.sqlite3"))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=client)
+    source_results = getattr(result, "sources", None)
+    assert source_results is not None
+    assert set(source_results) == {"github_commits"}
+    assert source_results["github_commits"].status == "failure"
+    assert result.error_code == "all_sources_failed"
+
+
+def test_disabled_smtp_health_check_never_connects(config, monkeypatch):
+    from dataclasses import replace
+    calls = []
+    def forbidden_connect(*args, **kwargs):
+        calls.append(args)
+        raise OSError("SMTP is disabled")
+    cfg = replace(config, smtp=replace(config.smtp, host="", sender="", recipients=[]))
+    monkeypatch.setattr("smart_daily_report.shared.health.smtplib.SMTP", forbidden_connect)
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        result = check_dependencies(cfg, client)
+    assert calls == [], "A disabled channel must not open a connection"
+    assert result.success and "smtp" not in result.checks
+
+
+def test_task_health_check_uses_same_get_contract(config):
+    from dataclasses import replace
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith('/token'): return httpx.Response(200,json={'code':0,'tenant_access_token':'token'})
+        return httpx.Response(200,json={'code':0,'data':{'items':[],'has_more':False}})
+    cfg=replace(config,lark_project_ids=['list-1'],lark_app_id='app',lark_app_secret='secret',lark_token_path='/token',
+      lark_task_search_path='/task/v2/tasklists/{tasklist_guid}/tasks',smtp=replace(config.smtp,host=''))
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client: result=check_dependencies(cfg,client)
+    task_request=calls[-1]
+    assert task_request.method=='GET'
+    assert task_request.url.path.endswith('/tasklists/list-1/tasks') and task_request.content==b''
+    assert dict(task_request.url.params)=={'page_size':'1','completed':'true','user_id_type':'open_id'}
+    assert result.success

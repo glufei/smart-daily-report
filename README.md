@@ -4,6 +4,14 @@
 
 项目适合小团队在工作日由外部调度器触发生成 CLI；v1.1 已完成 OpenDesign UI 设计迭代、React 浏览器页面和本机只读 HTTP 接口，可按日期查看已保存日报及来源状态。日报不使用 AI 自动撰写摘要。[Web 运行说明](docs/frontend/local-run.md)、[设计证据](docs/frontend/opendesign-evidence.md)、[验收记录](docs/frontend/acceptance.md)。
 
+## v1.2.0 版本与验收
+
+已实现 React → 真实 FastAPI → GitHub/飞书采集 → SQLite预览，以及单独确认固定版本后SMTP/飞书推送。前端默认仍为只读，操作模式没有 Mock 成功回退。2026-10-05已补齐真实工作日消息源平台→SQLite→API→React核对；此前非空GitHub2条、飞书完成任务1条及用户确认双渠道实际收件均通过。本轮四项审查遗漏已按TDD修复，产品版本1.2.0，最终pytest286/覆盖率95.03%、前端102、浏览器14+26、类型/两模式构建、基础CLI及两种启动检查均通过。发布记录见[v1.2.0说明](docs/frontend/v1.2-release.md)。
+
+本机已验收配置和历史库保留在 `E:\worktrees\v1-2-real-integration\smart-daily-report`。启动真实操作：在该工作区根目录设置 `PYTHONPATH=src` 并注入本机操作令牌及 YAML 指定的后端凭证，再用本机Python环境执行 `-m smart_daily_report.web.main --config config.yaml`；另一个窗口在该工作区frontend设置 `VITE_API_MODE=operations` 后 `npm run dev`。浏览器输入本项目操作令牌，先生成预览，再单独确认推送。不会自动读取.env；准确命令、旧飞书任务配置迁移、fixture和异常处理见 [完整启动说明](docs/frontend/local-run.md#v12-真实操作模式)。
+
+[完成情况审查](docs/frontend/v1.2-completion-audit.md) · [163邮箱与飞书逐步配置](docs/frontend/v1.2-configuration-163-feishu.md) · [本轮验收记录](docs/frontend/v1.2-acceptance.md) · [TDD记录](docs/frontend/v1.2-tdd-log.md) · [上游契约依据](docs/frontend/v1.2-upstream-contracts.md)。此前v1.0收件与v1.1的fixture测试保留为历史证据，不代替v1.2真实验收。
+
 ## ✨ 核心工程亮点：规范先于代码
 
 本项目以规范作为第一手工件，代码、测试与验收从规范推导：
@@ -13,7 +21,7 @@
 | 需求定义 | [`specs/proposal.md`](specs/proposal.md) | 明确目标、范围、三段式日报、异常边界和量化验收标准。 |
 | 架构设计 | [`specs/design.md`](specs/design.md)、[`specs/adrs/`](specs/adrs/) | 定义管道架构、模块职责、HTTP/存储决策和非功能性约束。 |
 | 接口契约 | [`specs/contracts/`](specs/contracts/) | 固定数据模型、模块签名及「采集失败 ≠ 成功但无记录」的语义。 |
-| 任务拆解 | [`specs/tasks.md`](specs/tasks.md) | 将工作拆成 Task 1–14 的依赖 DAG，每项对应可验证交付物；v1.1 在用户确认规范后执行。 |
+| 任务拆解 | [`specs/tasks.md`](specs/tasks.md) | Task 1–18 的依赖 DAG 和可验证交付物；v1.2 Task15–18已验收。 |
 | 实现与验证 | [`src/`](src/)、[`tests/`](tests/)、[`frontend/`](frontend/) | 按契约实现模块，用后端回归、前端意图测试及真实 HTTP 浏览器测试验收。 |
 
 **v1.1 质量证据（2026-09-30）：**Task 11–14 已验收，Python **98 项通过、总覆盖率 92.02%**，Vitest **15 项通过**，Playwright **14 项通过**；两版 OpenDesign 原型有 **28 项状态/视口/键盘检查**。`npm ci`、类型检查与生产构建通过。`pyproject.toml` 保持总覆盖率 **≥90%** 的门槛并统计分支覆盖率。命令、截图、首次失败及验证边界见 [验收记录](docs/frontend/acceptance.md)。
@@ -30,6 +38,7 @@ GitHub 提交 ────┐
                                                    └─> 飞书机器人：Markdown 卡片
 
 浏览器 React 页面 ──GET 指定日期──> FastAPI 只读适配层 ──mode=ro──> SQLite 历史
+浏览器操作模式 ──鉴权/幂等键──> FastAPI 操作层 ──生成预览 / 独立确认推送
 
 OpenDesign UI ──两轮原型与设计交接──> React 页面（设计期，无运行时模型调用）
 ```
@@ -38,7 +47,7 @@ OpenDesign UI ──两轮原型与设计交接──> React 页面（设计期�
 - **Shared** 校验配置、判断工作日、按 GitHub/飞书账号映射成员、过滤敏感消息，提供 JSON 日志、HTTP 重试及 SQLite 存储。
 - **Generator** 将成员记录渲染成同一份 `DailyReport` 的 Markdown 与 HTML；正常零记录显示「今日无记录」，来源失败显示「数据获取失败」。
 - **Notifier** 分别投递邮件和飞书；一个渠道失败仍尝试另一个渠道。根目录 `main.py` 只委托包内编排入口执行。
-- **Web** 独立启动，只读取启动时指定的历史库，输出白名单 JSON；查询不会调用采集、生成、写入或推送。唯一业务接口为 `GET /api/v1/reports/{report_date}`。
+- **Web 只读模式** 独立启动，只读取启动时指定的历史库，输出白名单 JSON；查询不会调用采集、生成、写入或推送。只读模式接口为 `GET /api/v1/reports/{report_date}`；v1.2操作模式额外提供鉴权生成、状态、预览与独立推送接口。
 - **Frontend** 按日期查看日报；区分无日报、正常零记录、来源失败、查询错误，10 秒超时且不自动重试，旧响应不能覆盖新日期。
 
 **设计决策落地：**[ADR-001](specs/adrs/001-http-client.md) 采用可注入、可 Mock 的 `httpx` 客户端，当前程序使用同步 API；[ADR-002](specs/adrs/002-sqlite-storage.md) 采用本地 SQLite，以日报日期为键重复运行时更新当天记录；[ADR-003](specs/adrs/003-collect-result.md) 用 `CollectResult` 区分采集失败与成功空结果。部分来源失败时仍生成可用日报，全部来源失败时不生成、不推送。
@@ -58,7 +67,7 @@ OpenDesign UI ──两轮原型与设计交接──> React 页面（设计期�
 │   ├── collector/                  # GitHub 提交、飞书任务与消息采集
 │   ├── generator/                  # 成员日报组装、Markdown/HTML 渲染
 │   ├── notifier/                   # SMTP 邮件与飞书机器人投递
-│   ├── web/                        # 独立只读 HTTP 入口、响应 DTO 和错误映射
+│   ├── web/                        # 只读/操作 HTTP 入口、鉴权、响应 DTO 与固定快照
 │   └── shared/                     # 模型、配置、身份、HTTP、日志、日历、健康检查、存储
 └── tests/
     ├── unit/                       # 单模块边界和失败分支
@@ -231,8 +240,8 @@ npm run test:e2e
 ## 运行边界与安全
 
 - 来源失败与正常零记录分开表示，避免错误地向收件人报告「今日无记录」。飞书消息先按工作关键词筛选，再排除命中敏感词的整条消息；未映射成员只记录计数告警，不把源内容误归给别人。
-- 日报中的外部文本在 HTML 中转义，链接仅允许 `http` / `https`。日志不记录 Token、Webhook、SMTP 密码或消息正文。
+- 日报中的外部文本在 HTML 和 Markdown 中转义，模板链接仅允许 `http` / `https`，Markdown目的地址分隔符编码。日志不记录 Token、Webhook、SMTP 密码或消息正文。
 - SQLite 是本机历史记录，不是备份服务；存储路径、文件访问权限和备份策略由部署环境管理。
-- 真实租户的「有任务」和「多页任务」响应尚需在出现相应数据后复核；现阶段这两类行为由 Mock 测试验证。
+- 真实租户的「有任务」已核对1条完成任务；尚无真实多页任务样本，该分页行为目前由离线测试验证。周末和配置假日不生成、不推送；不能用周末消息的采集层证据替代工作日消息的页面验收。
 
 详细需求、接口和验收依据请参阅 [`specs/`](specs/proposal.md)。

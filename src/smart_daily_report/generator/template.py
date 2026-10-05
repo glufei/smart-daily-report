@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 from datetime import date
 from typing import Mapping, Sequence
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from ..shared.models import CollectResultStatus, MemberReport
 
@@ -16,11 +16,22 @@ def safe_url(url: str | None) -> str | None:
     return url if urlparse(url).scheme.casefold() in {"http", "https"} else None
 
 
+def _markdown_text(text: str) -> str:
+    # Entity references remain literal text rather than Markdown/card controls.
+    controls = "\\`*_{}[]()<>#+-.!|~:&\n\r"
+    return text.translate({ord(char): f"&#{ord(char)};" for char in controls})
+
+
+def _markdown_url(url: str | None) -> str | None:
+    allowed = safe_url(url)
+    return quote(allowed, safe=":/?#@!$&'*+,;=%._~-") if allowed else None
+
+
 def render_markdown(report_date: date, team_name: str, members: Sequence[MemberReport],
                     source_status: Mapping[str, CollectResultStatus]) -> str:
-    lines = [f"# {team_name} 日报（{report_date.isoformat()}）", ""]
+    lines = [f"# {_markdown_text(team_name)} 日报（{report_date.isoformat()}）", ""]
     for member in members:
-        lines.extend((f"## {member.display_name}", ""))
+        lines.extend((f"## {_markdown_text(member.display_name)}", ""))
         for title, attr, source in SECTIONS:
             lines.extend((f"### {title}", ""))
             if source_status.get(source, "success") == "failure":
@@ -32,15 +43,15 @@ def render_markdown(report_date: date, team_name: str, members: Sequence[MemberR
                 continue
             for record in records:
                 if attr == "commits":
-                    label = f"{record.repository}: {record.message}（+{record.additions}/-{record.deletions}，{record.files_changed} 个文件）"
-                    url = safe_url(record.url)
+                    label = _markdown_text(f"{record.repository}: {record.message}（+{record.additions}/-{record.deletions}，{record.files_changed} 个文件）")
+                    url = _markdown_url(record.url)
                     lines.append(f"- [{label}]({url})" if url else f"- {label}")
                 elif attr == "tasks":
-                    label = f"{record.title}（{record.status}）"
-                    url = safe_url(record.url)
+                    label = _markdown_text(f"{record.title}（{record.status}）")
+                    url = _markdown_url(record.url)
                     lines.append(f"- [{label}]({url})" if url else f"- {label}")
                 else:
-                    lines.append(f"- {record.content}")
+                    lines.append(f"- {_markdown_text(record.content)}")
             lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

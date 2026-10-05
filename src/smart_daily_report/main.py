@@ -36,6 +36,10 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
         if not is_workday(report_date, config.holidays):
             logger.info("skipped_non_workday", extra={"run_id": run_id, "status": "skipped"})
             return RunResult(True, skipped=True)
+        enabled = {"github_commits": bool(config.github_repositories),
+                   "lark_tasks": bool(config.lark_project_ids), "lark_messages": bool(config.lark_chat_ids)}
+        if not any(enabled.values()):
+            return RunResult(False, error_code="no_sources_configured")
         zone = ZoneInfo(config.timezone)
         window = __import__("smart_daily_report.shared.models", fromlist=["CollectionWindow"]).CollectionWindow(
             datetime.combine(report_date, datetime_time.min, zone),
@@ -80,9 +84,10 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
             logger.info("collection_finished", extra={"run_id": run_id, "source": result.source,
                         "status": result.status, "record_count": len(result.records), "attempt": result.attempts,
                         "error_code": result.error_code})
-        if all(result.status == "failure" for result in results):
+        source_results = {result.source: result for result in results if enabled[result.source]}
+        if all(result.status == "failure" for result in source_results.values()):
             logger.error("all_sources_failed", extra={"run_id": run_id, "status": "failure"})
-            return RunResult(False, error_code="all_sources_failed")
+            return RunResult(False, error_code="all_sources_failed", sources=source_results)
         commits = next(item.records for item in results if item.source == "github_commits")
         tasks = next(item.records for item in results if item.source == "lark_tasks")
         messages = filter_sensitive_messages(next(item.records for item in results if item.source == "lark_messages"), config.sensitive_keywords)
@@ -98,16 +103,21 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
         members = map_records_to_members(config, commits, tasks, messages, statuses)
         report = generate_daily_report(report_date, config.team_name, members, statuses, datetime.now(timezone.utc))
         db_path = Path(config.database_path)
-        write_report(db_path, report)
+        try:
+            write_report(db_path, report)
+        except Exception as exc:
+            logger.error("report_write_failed", extra={"run_id": run_id, "error_type": type(exc).__name__})
+            return RunResult(False, error_code="report_write_failed", sources=source_results)
         deliveries = {}
         if not dry_run:
-            try:
-                email_result = send_email(report, config.smtp.recipients, config.smtp, **({"smtp_factory": smtp_factory} if smtp_factory else {}), sleep=sleep)
-            except Exception as exc:
-                email_result = DeliveryResult(False, 1, "email_unhandled")
-                logger.error("notifier_unhandled_error", extra={"run_id": run_id, "channel": "email", "status": "failure", "error_code": "email_unhandled", "error_type": type(exc).__name__})
-            deliveries["email"] = email_result
-            logger.info("delivery_finished", extra={"run_id": run_id, "channel": "email", "status": "success" if email_result.success else "failure", "error_code": email_result.error_code})
+            if config.smtp.host:
+                try:
+                    email_result = send_email(report, config.smtp.recipients, config.smtp, **({"smtp_factory": smtp_factory} if smtp_factory else {}), sleep=sleep)
+                except Exception as exc:
+                    email_result = DeliveryResult(False, 1, "email_unhandled")
+                    logger.error("notifier_unhandled_error", extra={"run_id": run_id, "channel": "email", "status": "failure", "error_code": "email_unhandled", "error_type": type(exc).__name__})
+                deliveries["email"] = email_result
+                logger.info("delivery_finished", extra={"run_id": run_id, "channel": "email", "status": "success" if email_result.success else "failure", "error_code": email_result.error_code})
             if config.lark_webhook:
                 try:
                     lark_result = send_lark_message(report, config.lark_webhook, client=client, sleep=sleep)
@@ -120,7 +130,7 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
         succeeded = all(item.success for item in deliveries.values())
         logger.info("run_finished", extra={"run_id": run_id, "status": "success" if succeeded else "failure", "duration_ms": duration})
         return RunResult(succeeded, report=report, deliveries=deliveries,
-                         error_code=None if succeeded else "delivery_failed")
+                         error_code=None if succeeded else "delivery_failed", sources=source_results)
     except Exception as exc:
         logger.error("run_failed", extra={"run_id": run_id, "status": "failure", "error_code": "internal_error", "error_type": type(exc).__name__})
         return RunResult(False, error_code="internal_error")

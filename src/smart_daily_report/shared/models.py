@@ -179,6 +179,7 @@ class DeliveryResult:
     success: bool
     attempts: int
     error_code: str | None = None
+    outcome: Literal["accepted", "rejected", "partial_failure", "unknown"] | None = None
 
 
 @dataclass(frozen=True)
@@ -195,3 +196,4 @@ class RunResult:
     report: DailyReport | None = None
     deliveries: dict[str, DeliveryResult] = field(default_factory=dict)
     error_code: str | None = None
+    sources: dict[str, CollectResult] = field(default_factory=dict)

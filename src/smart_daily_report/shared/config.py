@@ -58,18 +58,35 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
     holidays = set()
     try:
         holidays = {date.fromisoformat(value) for value in team.get("holidays", [])}
-        smtp = SmtpConfig(
-            host=_required(smtp_raw, "host", "team.smtp"),
-            port=int(smtp_raw.get("port", 587)),
-            username=_env(smtp_raw, "username_env", env),
-            password=_env(smtp_raw, "password_env", env),
-            sender=_required(smtp_raw, "sender", "team.smtp"),
-            recipients=list(smtp_raw.get("recipients", [])),
-            starttls=bool(smtp_raw.get("starttls", True)),
-            use_ssl=bool(smtp_raw.get("use_ssl", False)),
-        )
-        if smtp.starttls and smtp.use_ssl:
-            raise ConfigError("SMTP starttls and use_ssl cannot both be enabled")
+        if smtp_raw:
+            recipients = smtp_raw.get("recipients")
+            if not isinstance(recipients, list) or not recipients or not all(isinstance(value, str) and value.strip() for value in recipients):
+                raise ConfigError("SMTP requires non-empty recipients")
+            if any(key in smtp_raw for key in ('username_env', 'password_env')):
+                if any(not isinstance(smtp_raw.get(key), str) or not smtp_raw[key].strip()
+                       or not _env(smtp_raw, key, env) or not _env(smtp_raw, key, env).strip()
+                       for key in ('username_env', 'password_env')):
+                    raise ConfigError("SMTP login requires both configured credential variables")
+            port = int(smtp_raw.get("port", 587))
+            if not 1 <= port <= 65535:
+                raise ConfigError("SMTP port must be between 1 and 65535")
+            if any(type(smtp_raw.get(key, default)) is not bool
+                   for key, default in (("starttls", True), ("use_ssl", False))):
+                raise ConfigError("SMTP TLS options must be booleans")
+            smtp = SmtpConfig(
+                host=_required(smtp_raw, "host", "team.smtp"),
+                port=port,
+                username=_env(smtp_raw, "username_env", env),
+                password=_env(smtp_raw, "password_env", env),
+                sender=_required(smtp_raw, "sender", "team.smtp"),
+                recipients=list(smtp_raw.get("recipients", [])),
+                starttls=bool(smtp_raw.get("starttls", True)),
+                use_ssl=bool(smtp_raw.get("use_ssl", False)),
+            )
+            if smtp.starttls and smtp.use_ssl:
+                raise ConfigError("SMTP starttls and use_ssl cannot both be enabled")
+        else:
+            smtp = SmtpConfig("", 587, None, None, "", [])
         config = RunConfig(
             team_name=_required(team, "name", "team"), timezone=timezone,
             members=members,
@@ -86,13 +103,15 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
             lark_app_id=_env(team, "lark_app_id_env", env),
             lark_app_secret=_env(team, "lark_app_secret_env", env),
             lark_webhook=_env(team, "lark_webhook_env", env),
-            lark_task_search_path=str(team.get("lark_task_search_path", "/task/v2/tasks/search")),
+            lark_task_search_path=str(team.get("lark_task_search_path", "/task/v2/tasklists/{tasklist_guid}/tasks")),
             lark_message_path=str(team.get("lark_message_path", "/im/v1/messages")),
             lark_token_path=str(team.get("lark_token_path", "/auth/v3/tenant_access_token/internal")),
             smtp=smtp,
         )
     except (TypeError, ValueError) as exc:
         raise ConfigError("Configuration contains invalid field values") from exc
+    if config.lark_project_ids and config.lark_task_search_path != "/task/v2/tasklists/{tasklist_guid}/tasks":
+        raise ConfigError("Enabled tasks require the authorized tasklist GET path; migrate the old search configuration")
     validate_identity_mappings(config)
     return config
 

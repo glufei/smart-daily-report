@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Sequence
+from urllib.parse import quote
 
 import httpx
 
@@ -21,12 +22,14 @@ def _dt(value) -> datetime:
 
 
 def _data_items(payload: dict) -> tuple[list[dict], str | None]:
-    data = payload.get("data", payload)
-    items = data.get("items", data.get("tasks", data.get("messages", [])))
+    data = payload["data"]
+    items = data["items"]
+    if not isinstance(items, list) or "has_more" in data and type(data["has_more"]) is not bool:
+        raise ValueError("Invalid message page")
     return items, data.get("page_token")
 
 
-def _post_lark(client, provider, base_url, path, body, source, sleep=None, params=None):
+def _get_lark(client, provider, base_url, path, sleep=None, params=None):
     attempts = 0
     refreshed = False
     while True:
@@ -34,8 +37,8 @@ def _post_lark(client, provider, base_url, path, body, source, sleep=None, param
             token = provider.get()
         except Exception:
             return None, attempts + 1, "token_refresh_failed"
-        request_args = {"json": body, "params": params, "headers": {"Authorization": f"Bearer {token}"}, "timeout": 10}
-        response, used, error = request_with_retry(client, "POST", base_url.rstrip("/") + "/" + path.lstrip("/"), **request_args) if sleep is None else request_with_retry(client, "POST", base_url.rstrip("/") + "/" + path.lstrip("/"), sleep=sleep, **request_args)
+        request_args = {"params": params, "headers": {"Authorization": f"Bearer {token}"}, "timeout": 10}
+        response, used, error = request_with_retry(client, "GET", base_url.rstrip("/") + "/" + path.lstrip("/"), **request_args) if sleep is None else request_with_retry(client, "GET", base_url.rstrip("/") + "/" + path.lstrip("/"), sleep=sleep, **request_args)
         attempts += used
         if response is not None and response.status_code in (401, 99991663) and not refreshed:
             refreshed = True
@@ -48,7 +51,9 @@ def _post_lark(client, provider, base_url, path, body, source, sleep=None, param
             return None, attempts, error or f"http_{response.status_code if response else 'unknown'}"
         try:
             payload = response.json()
-            if payload.get("code", 0) != 0:
+            if not isinstance(payload, dict) or type(payload.get("code")) is not int:
+                return None, attempts, "invalid_payload"
+            if payload["code"] != 0:
                 if payload.get("code") in (99991663, 99991664) and not refreshed:
                     refreshed = True
                     try:
@@ -66,37 +71,55 @@ def collect_tasks(client: httpx.Client, project_ids: Sequence[str], window: Coll
                   token_provider: TokenProvider, api_base_url: str, path: str, sleep=None) -> CollectResult[TaskRecord]:
     records: list[TaskRecord] = []
     attempts_total = 0
+    seen_records: set[tuple[str, str | None]] = set()
     for project_id in project_ids:
         token: str | None = None
         seen_tokens: set[str] = set()
         while True:
-            body = {"page_size": 100, "tasklist_guid": project_id}
-            params = {}
+            params = {"page_size": "100", "completed": "true", "user_id_type": "open_id"}
             if token:
                 params["page_token"] = token
-            payload, attempts, error = _post_lark(client, token_provider, api_base_url, path, body, "lark_tasks", sleep, params)
+            payload, attempts, error = _get_lark(client, token_provider, api_base_url, path.replace("{tasklist_guid}", quote(project_id, safe="")), sleep, params)
             attempts_total += attempts
             if error:
                 return CollectResult("lark_tasks", "failure", error_code=error, message="Feishu task collection failed", attempts=max(1, attempts_total))
             try:
-                items, next_token = _data_items(payload)
+                data = payload["data"]
+                items = data["items"]
+                has_more = data["has_more"]
+                next_token = data.get("page_token")
+                if not isinstance(items, list) or type(has_more) is not bool:
+                    raise ValueError("Invalid task page")
                 for item in items:
-                    changed = _dt(item.get("updated_time") or item.get("completed_at") or item.get("created_at"))
+                    guid, title, completed = item["guid"], item["summary"], item["completed_at"]
+                    if not isinstance(guid, str) or not guid.strip() or not isinstance(title, str):
+                        raise ValueError("Invalid task identity")
+                    if not (type(completed) is int or isinstance(completed, str) and completed.isascii() and completed.isdigit()):
+                        raise ValueError("Invalid completion time")
+                    if int(completed) < 0:
+                        raise ValueError("Invalid completion time")
+                    if int(completed) == 0:
+                        continue
+                    changed = datetime.fromtimestamp(int(completed) / 1000, timezone.utc)
+                    members = item["members"]
+                    if not isinstance(members, list):
+                        raise ValueError("Invalid task members")
+                    assignees = []
+                    for member in members:
+                        if member.get("type") == "user" and member.get("role") == "assignee":
+                            if not isinstance(member.get("id"), str) or not member["id"]:
+                                raise ValueError("Invalid task assignee")
+                            assignees.append(member["id"])
                     if window.start <= changed < window.end:
-                        assignee = item.get("assignee") or item.get("assignee_id") or item.get("assignee_user_id")
-                        if isinstance(assignee, dict):
-                            assignee = assignee.get("id") or assignee.get("user_id")
-                        records.append(TaskRecord(
-                            record_id=str(item.get("guid") or item.get("task_id") or item.get("id")),
-                            title=str(item.get("summary") or item.get("title") or ""),
-                            status=str(item.get("status", "unknown")), assignee_user_id=assignee,
-                            changed_at=changed, url=item.get("url") or item.get("link"),
-                            status_from=item.get("status_from"), status_to=str(item.get("status_to") or item.get("status", "unknown")),
-                        ))
-                has_more = payload.get("data", payload).get("has_more")
+                        for assignee in assignees or [None]:
+                            key = (guid, assignee)
+                            if key not in seen_records:
+                                seen_records.add(key)
+                                records.append(TaskRecord(record_id=guid, title=title, status="completed", assignee_user_id=assignee,
+                                                          changed_at=changed, url=None, status_from=None, status_to="completed"))
                 if has_more is False:
                     break
-                if not next_token:
+                if not isinstance(next_token, str) or not next_token:
                     if has_more:
                         return CollectResult("lark_tasks", "failure", error_code="invalid_pagination", message="Feishu task pagination failed", attempts=max(1, attempts_total))
                     break
@@ -104,7 +127,7 @@ def collect_tasks(client: httpx.Client, project_ids: Sequence[str], window: Coll
                     return CollectResult("lark_tasks", "failure", error_code="invalid_pagination", message="Feishu task pagination failed", attempts=max(1, attempts_total))
                 seen_tokens.add(next_token)
                 token = next_token
-            except (ValueError, TypeError, AttributeError):
+            except (ValueError, TypeError, AttributeError, KeyError, OverflowError, OSError):
                 return CollectResult("lark_tasks", "failure", error_code="invalid_payload", message="Feishu task response could not be parsed", attempts=max(1, attempts_total))
     return CollectResult("lark_tasks", "success", records, attempts=max(1, attempts_total))
 
@@ -128,44 +151,17 @@ def collect_messages(client: httpx.Client, chat_ids: Sequence[str], window: Coll
     attempts_total = 0
     for chat_id in chat_ids:
         page_token: str | None = None
+        seen_tokens: set[str] = set()
         while True:
             params = {"container_id_type": "chat", "container_id": chat_id,
                       "start_time": str(int(window.start.timestamp())), "end_time": str(int(window.end.timestamp())), "page_size": "50"}
             if page_token:
                 params["page_token"] = page_token
-            try:
-                bearer = token_provider.get()
-            except Exception:
-                return CollectResult("lark_messages", "failure", error_code="token_refresh_failed", message="Feishu message collection failed", attempts=max(1, attempts_total + 1))
-            headers = {"Authorization": f"Bearer {bearer}"}
-            url = api_base_url.rstrip("/") + "/" + path.lstrip("/")
-            response, used, error = request_with_retry(client, "GET", url, params=params, headers=headers, timeout=10) if sleep is None else request_with_retry(client, "GET", url, sleep=sleep, params=params, headers=headers, timeout=10)
+            payload, used, error = _get_lark(client, token_provider, api_base_url, path, sleep, params)
             attempts_total += used
-            if response is not None and response.status_code == 401:
-                try:
-                    bearer = token_provider.get(refresh=True)
-                    response = client.get(url, params=params, headers={"Authorization": f"Bearer {bearer}"}, timeout=10)
-                    attempts_total += 1
-                    error = None if response.is_success else f"http_{response.status_code}"
-                except Exception:
-                    error = "token_refresh_failed"
-            if error or response is None or response.is_error:
-                return CollectResult("lark_messages", "failure", error_code=error or f"http_{response.status_code}", message="Feishu message collection failed", attempts=max(1, attempts_total))
+            if error:
+                return CollectResult("lark_messages", "failure", error_code=error, message="Feishu message collection failed", attempts=max(1, attempts_total))
             try:
-                payload = response.json()
-                if payload.get("code", 0) != 0:
-                    if payload.get("code") in (99991663, 99991664):
-                        try:
-                            bearer = token_provider.get(refresh=True)
-                            response = client.get(url, params=params, headers={"Authorization": f"Bearer {bearer}"}, timeout=10)
-                            attempts_total += 1
-                            if response.is_error:
-                                return CollectResult("lark_messages", "failure", error_code=f"http_{response.status_code}", message="Feishu message collection failed", attempts=max(1, attempts_total))
-                            payload = response.json()
-                        except Exception:
-                            return CollectResult("lark_messages", "failure", error_code="token_refresh_failed", message="Feishu message collection failed", attempts=max(1, attempts_total + 1))
-                    if payload.get("code", 0) != 0:
-                        return CollectResult("lark_messages", "failure", error_code=f"lark_{payload.get('code')}", message="Feishu message collection failed", attempts=max(1, attempts_total))
                 items, page_token = _data_items(payload)
                 for item in items:
                     content = _message_text(item)
@@ -180,8 +176,14 @@ def collect_messages(client: httpx.Client, chat_ids: Sequence[str], window: Coll
                         content=content, sent_at=_dt(item.get("create_time")),
                         url=item.get("url"), chat_name=str(item.get("chat_name") or chat_id),
                     ))
-                if not page_token:
+                has_more = payload.get("data", payload).get("has_more")
+                if has_more is False:
                     break
-            except (ValueError, TypeError, AttributeError):
+                if not page_token and not has_more:
+                    break
+                if not isinstance(page_token, str) or not page_token or page_token in seen_tokens:
+                    return CollectResult("lark_messages", "failure", error_code="invalid_pagination", message="Feishu message pagination failed", attempts=max(1, attempts_total))
+                seen_tokens.add(page_token)
+            except (ValueError, TypeError, AttributeError, KeyError):
                 return CollectResult("lark_messages", "failure", error_code="invalid_payload", message="Feishu message response could not be parsed", attempts=max(1, attempts_total))
     return CollectResult("lark_messages", "success", records, attempts=max(1, attempts_total))
