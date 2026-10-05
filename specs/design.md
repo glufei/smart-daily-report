@@ -54,7 +54,7 @@ v1.1 开始前只有 CLI 与内部 Python 函数，不能直接被浏览器调�
 
 v1.1 唯一业务路由是 `GET /api/v1/reports/{report_date}`，契约保留。直接复用 SQLite 结构化数据，不解析 HTML/Markdown，不在前端重做身份归一/敏感过滤。旧历史未保存投递结果，不推断其“已投递”；v1.2 只为新增操作记录明确结果。
 
-### 1.4 v1.2 联调与交互架构（已确认、待实现）
+### 1.4 v1.2 联调与交互架构（已实现并完成真实验收）
 
 ```text
 React ──生成 POST / 本机操作 Bearer──> FastAPI 操作层
@@ -67,7 +67,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 
 采用复用管道的轻量后台操作：POST 持久记录操作并返回 202，FastAPI 同步后台函数在线程池执行既有阻塞 I/O；浏览器查询状态。每个服务只允许一个运行中的 Web 操作，明确单 Uvicorn worker、不启用 reload；不引入 Celery/Redis、不建立待执行队列。同步长 POST 更简单但断线结果难确认；外部任务队列适合多实例，本轮规模不需要。[FastAPI BackgroundTasks](https://fastapi.tiangolo.com/tutorial/background-tasks/) 只是执行机制，不保证崩溃恢复；幂等、排他及中断状态由本项目操作记录保证。
 
-**启动与配置**：原 `--database` 只读启动继续无需源平台秘密；新增互斥的 `--config` 操作启动，加载一次既有 RunConfig，以其 `database_path` 作为唯一日报库。操作启动要求环境变量 `DAILY_REPORT_WEB_TOKEN` 非空且至少 32 个字符，不从 CLI 参数传秘密。来源至少启用一个；已启用飞书来源缺少 App ID/Secret 等必需凭证时启动失败。只读模式不加载 RunConfig、不创建操作记录库，写路由不启用。
+**启动与配置**：原 `--database` 只读启动继续无需源平台秘密；新增互斥的 `--config` 操作启动，加载一次既有 RunConfig，以其 `database_path` 作为唯一日报库。操作启动要求环境变量 `DAILY_REPORT_WEB_TOKEN` 非空且至少 32 个字符，不从 CLI 参数传秘密。使用 README 的 `secrets.token_hex(32)` 生成纯 ASCII 令牌，不含换行或首尾空格；当前启动校验尚未强制限制 HTTP 头字符集，见最终交付说明的已知限制。来源至少启用一个；已启用飞书来源缺少 App ID/Secret 等必需凭证时启动失败。只读模式不加载 RunConfig、不创建操作记录库，写路由不启用。
 
 **CORS 与 Token**：沿用 loopback Host 与两个明确 Origin（127.0.0.1 的 5173/4173），操作模式允许 GET/POST/OPTIONS 与 Authorization/Content-Type/Idempotency-Key 头，不使用通配 Origin 或 Cookie。OPTIONS 预检不要求 Bearer，但无业务副作用；受保护路由逐次校验 `Authorization: Bearer <本项目操作令牌>`，使用 FastAPI HTTPBearer 与标准库安全比较。CORS 不是鉴权，无 Origin 的脚本请求也必须携带正确令牌。浏览器通过密码输入暂存令牌于内存，退出/刷新清空；绝不将上游 Token/SMTP 密码/Webhook 写入 VITE 环境变量、浏览器存储或 URL。[CORS 官方依据](https://fastapi.tiangolo.com/tutorial/cors/)。
 
@@ -88,7 +88,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 ### 1.5 必须表面化的现有冲突
 
 - `run_report()` 把未配置来源记为成功空结果，随后对三个来源整体判断全失败。v1.2 选择按**已启用来源**判断：无已启用来源为配置错误；全部已启用来源失败不生成。兼容保留 ReportView 的三个 success/failure 键，新增操作 `sources` 明确标记 disabled，不宣称其真实调用成功；旧历史没有启用元数据时显示“启用情况未记录”。
-- 现有飞书任务适配以 tenant Token 调用仅支持 USER Token 的 search，并以更新时间推断状态变更；v1.2 采用用户已确认的“已授权清单 + 所选日期完成任务”。改为 GET `/task/v2/tasklists/{tasklist_guid}/tasks`（支持 TENANT），按 `completed_at` 毫秒时间戳筛选配置时区的 `[当日零点, 次日零点)`；0 表示未完成，不回退 updated_at/created_at。清单响应 `data.items` 为 TaskSummary，含 guid/summary/completed_at/members，足以满足本期范围，无须逐条获取详情；摘要缺链接时保留 null，不拼造链接。仅处理 user/assignee 成员并请求 user_id_type=open_id；每个负责人一条兼容 TaskRecord，以 `(guid, assignee_user_id)` 跨页/清单去重。缺少负责人保留一条未映射记录，沿用现有诊断。任务字段的无效非零时间/缺失 guid 为来源失败，不伪装空。原任意状态迁移语义与 search 方式明确退役，历史结果保留，旧实现待 Task 16 以先失败测试替换。
+- 原飞书任务适配以 tenant Token 调用仅支持 USER Token 的 search，并以更新时间推断状态变更；v1.2 采用用户已确认的“已授权清单 + 所选日期完成任务”。已改为 GET `/task/v2/tasklists/{tasklist_guid}/tasks`（支持 TENANT），按 `completed_at` 毫秒时间戳筛选配置时区的 `[当日零点, 次日零点)`；0 表示未完成，不回退 updated_at/created_at。清单响应 `data.items` 为 TaskSummary，含 guid/summary/completed_at/members，足以满足本期范围，无须逐条获取详情；摘要缺链接时保留 null，不拼造链接。仅处理 user/assignee 成员并请求 user_id_type=open_id；每个负责人一条兼容 TaskRecord，以 `(guid, assignee_user_id)` 跨页/清单去重。缺少负责人保留一条未映射记录，沿用现有诊断。任务字段的无效非零时间/缺失 guid 为来源失败，不伪装空。原任意状态迁移语义与 search 方式明确退役，历史结果保留；旧实现已在 Task 16 按先失败测试替换。
 
 字段依据：[官方 Python 清单请求](https://raw.githubusercontent.com/larksuite/oapi-sdk-python/v2_main/lark_oapi/api/task/v2/model/tasks_tasklist_request.py)、[TaskSummary](https://raw.githubusercontent.com/larksuite/oapi-sdk-python/v2_main/lark_oapi/api/task/v2/model/task_summary.py)、[官方 Go 模型与毫秒说明](https://raw.githubusercontent.com/larksuite/oapi-sdk-go/v3_main/service/task/v2/model.go)。SDK 版本间时间类型可能为整数或数字字符串，边界解析兼容这两者；这些资料不证明本租户已具备权限，真实授权与非空样本在 Task 18 验证。
 - 现有机器人实现只检查旧 `StatusCode` 并默认缺失为 0；v1.2 按平台文档核对新 `code` 与旧字段，明确失败码、矛盾字段或缺失成功证据不能算成功。现有 SMTP 未处理 `send_message()` 返回的部分拒绝收件人，也列入 Task 17 的先失败测试。

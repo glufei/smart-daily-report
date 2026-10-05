@@ -2,6 +2,7 @@ import json
 from datetime import date
 
 import httpx
+import pytest
 
 from smart_daily_report.main import main, run_health_check, run_report
 from smart_daily_report.shared.health import check_dependencies
@@ -102,7 +103,8 @@ def test_health_check_exercises_connected_github_lark_and_webhook(config, monkey
         if request.url.path.endswith("/tasklists/p/tasks"):
             assert request.method == "GET" and request.content == b""
             assert request.url.params["page_size"] == "1"
-        return httpx.Response(200, json={"tenant_access_token": "ok"} if "tenant_access_token" in request.url.path else {"resources": []})
+        return httpx.Response(200, json={"code": 0, "tenant_access_token": "ok"} if "tenant_access_token" in request.url.path
+                              else {"code": 0, "data": {"items": [], "has_more": False}})
     client = httpx.Client(transport=httpx.MockTransport(handler))
     result = check_dependencies(config, client)
     assert result.success and result.checks["github_api"] and result.checks["lark_token"] and result.checks["lark_webhook_configured"]
@@ -240,3 +242,33 @@ def test_task_health_check_uses_same_get_contract(config):
     assert task_request.url.path.endswith('/tasklists/list-1/tasks') and task_request.content==b''
     assert dict(task_request.url.params)=={'page_size':'1','completed':'true','user_id_type':'open_id'}
     assert result.success
+
+
+@pytest.mark.parametrize("source", ["tasks", "messages"])
+@pytest.mark.parametrize("payload,healthy", [
+    ({}, False),
+    ({"code": False}, False),
+    ({"code": "0"}, False),
+    ({"code": 0.0}, False),
+    ([], False),
+    ({"code": 99991672}, False),
+    ({"code": 0, "data": {"items": [], "has_more": False}}, True),
+])
+def test_lark_health_requires_explicit_integer_success_code(config, source, payload, healthy):
+    """A successful HTTP status alone cannot prove Feishu access is ready."""
+    from dataclasses import replace
+
+    cfg = replace(config, lark_app_id="app", lark_app_secret="secret", lark_token_path="/token",
+                  lark_project_ids=["list-1"] if source == "tasks" else [],
+                  lark_chat_ids=["chat-1"] if source == "messages" else [],
+                  smtp=replace(config.smtp, host=""))
+
+    def handler(request):
+        if request.url.path.endswith("/token"):
+            return httpx.Response(200, json={"code": 0, "tenant_access_token": "token"})
+        return httpx.Response(200, json=payload)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = check_dependencies(cfg, client)
+    assert result.success is healthy
+    assert result.checks.get(f"lark_{source}_1") is healthy

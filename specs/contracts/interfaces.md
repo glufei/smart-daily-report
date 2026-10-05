@@ -147,7 +147,7 @@ members:
 
 真实 Token、密码和 Webhook 通过环境变量注入。成员外部账号映射必须全局唯一。
 
-## v1.2 Web 操作适配增量（已实现，真实外部验收待完成）
+## v1.2 Web 操作适配增量（已实现并完成真实外部验收）
 
 - HTTP 接口、受保护 DTO、幂等和中断语义以 [`web-operations.md`](web-operations.md) 为准；操作层复用 Collector/Generator/Notifier，不让浏览器直接调用这些内部函数。
 - `run_report(config, report_date, dry_run=True, ...) -> RunResult` 保留签名和现有注入方式。RunResult 兼容增加 `sources: dict[str, CollectResult]`（默认空），交接已启用来源的原始成功/失败结果；禁用由 RunConfig 确定。API 仅投影状态/安全错误码，不返回 records/message 或秘密。
@@ -158,7 +158,7 @@ members:
 - SMTP 部分收件人拒绝、机器人新/旧业务码与不确定发送须在 Notifier 的最小增量中表达；可证明发送前未接受的暂时故障才重试，已提交后读超时/不可信响应不自动重发。单渠道异常仍不阻止另一渠道。
 - 配置校验按启用能力处理：整个 SMTP 配置块缺失/为空视为禁用邮件，不能阻止仅生成或飞书推送；提供了 SMTP 配置却缺少必需字段时启动失败，不静默禁用。配置了邮件则校验目标/TLS/凭证。对 CLI 无发送的调用保持可用，选择未启用渠道返回明确失败，不尝试连接空主机。
 - 前端 API 模块继续使用 fetch + Zod，复用旧 ReportView 类型；新 OperationView/PreviewView 按严格枚举解析。服务器错误正文不作为可执行 HTML 或不受控文案展示。
-- 具体服务函数拆分和文件归属在规范确认后的 Superpowers 实施计划中锁定；本节是兼容约束，不声称这些增量已经存在。
+- 服务函数拆分和文件归属已按 Superpowers 实施计划实现；真实验收及验证边界见 `docs/frontend/v1.2-acceptance.md`，最终复核见 `docs/frontend/v1.2-final-handover.md`。
 
 ## 2026-10-03完整性与输出转义核对
 

@@ -41,7 +41,8 @@ def check_dependencies(config: RunConfig, client: httpx.Client) -> HealthCheckRe
                     response = client.get(config.lark_api_base_url.rstrip("/") + "/" + config.lark_task_search_path.replace("{tasklist_guid}", quote(project_id, safe="")).lstrip("/"),
                                           params={"page_size": "1", "completed": "true", "user_id_type": "open_id"}, headers=headers, timeout=5)
                     payload = response.json() if response.is_success else {}
-                    checks[f"lark_tasks_{index + 1}"] = response.is_success and payload.get("code", 0) == 0
+                    checks[f"lark_tasks_{index + 1}"] = (response.is_success and isinstance(payload, dict)
+                        and type(payload.get("code")) is int and payload["code"] == 0)
                 now = datetime.now(timezone.utc)
                 for index, chat_id in enumerate(config.lark_chat_ids):
                     params = {"container_id_type": "chat", "container_id": chat_id, "page_size": "1",
@@ -50,7 +51,8 @@ def check_dependencies(config: RunConfig, client: httpx.Client) -> HealthCheckRe
                     response = client.get(config.lark_api_base_url.rstrip("/") + "/" + config.lark_message_path.lstrip("/"),
                                           params=params, headers=headers, timeout=5)
                     payload = response.json() if response.is_success else {}
-                    checks[f"lark_messages_{index + 1}"] = response.is_success and payload.get("code", 0) == 0
+                    checks[f"lark_messages_{index + 1}"] = (response.is_success and isinstance(payload, dict)
+                        and type(payload.get("code")) is int and payload["code"] == 0)
             except Exception:
                 checks["lark_token"] = False
     if config.lark_webhook:

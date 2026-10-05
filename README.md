@@ -285,6 +285,7 @@ npm run build
 
 | 文档 | 内容 |
 | --- | --- |
+| [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
 | [需求规范](specs/proposal.md) / [架构设计](specs/design.md) / [任务清单](specs/tasks.md) | SDD 的需求、技术方案、任务依赖和验收标准 |
 | [本机运行说明](docs/frontend/local-run.md) | 模式切换、构建预览、测试命令及本机路径 |
 | [配置指南](docs/frontend/v1.2-configuration-163-feishu.md) | 163 SMTP、GitHub、飞书凭证与配置示例 |
