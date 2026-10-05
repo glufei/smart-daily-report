@@ -1,6 +1,6 @@
 # 本机日报页面与 API
 
-v1.1 Task 11–14 已完成：OpenDesign 两轮 UI 原型、React 页面、只读 API 及验收。全部请求状态由确定性代码处理；页面不调用模型。
+v1.2.0 已发布，Task 11–18 已完成。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。最新复核及验证边界见 [最终交付说明](v1.2-final-handover.md)。
 
 ## Python 安装与启动（Windows PowerShell）
 
@@ -38,7 +38,7 @@ Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/reports/2026-04-23'
 .\.runtime\venv\Scripts\python.exe -m pytest -q
 ```
 
-完整测试需要安装 `dev,web` 两组依赖。不安装 `web` 的基础 CLI 仍可使用，测试包不会自动跳过 Web 测试。当前全套结果为 98 项通过、业务代码覆盖率 92.02%；没有跳过测试。Starlette 对 httpx TestClient 有一项上游弃用提示，当前契约测试可用；本轮未为消除提示替换项目既有 httpx 客户端。
+完整测试需要安装 `dev,web` 两组依赖。不安装 `web` 的基础 CLI 仍可使用，测试包不会自动跳过 Web 测试。v1.2.0 发布时为 286 项通过、覆盖率 95.03%；2026-10-05 最终复核修复健康检查后为 300 项通过、覆盖率 95.28%，无跳过。Starlette 对 httpx TestClient 有一项上游弃用提示，当前契约测试可用；未为消除提示替换项目既有 httpx 客户端。
 
 ## React 页面（第二个 PowerShell 窗口）
 
@@ -47,6 +47,7 @@ Node `^22.12.0 || ^24.0.0 || >=26.0.0`；本轮 Node 24.15.0、npm 11.12.1。运
 ```powershell
 cd frontend
 npm ci
+$env:VITE_API_MODE = 'readonly'
 npm run dev
 ```
 
@@ -60,7 +61,7 @@ npm run build
 npm run preview
 ```
 
-预览在 `http://127.0.0.1:4173`。构建时固定 API 地址；改变 `VITE_API_BASE_URL` 后需要重新 build。页面初始不自动查询，缺失日期为“该日期尚无日报”；不会通过浏览器创建日报。API 和 Vite 终端均可 Ctrl+C 结束。测试期间留下的临时示例预览使用 `.runtime/api-smoke.sqlite3`、2026-09-25，只包含虚构数据；查看实际历史需自行用实际 SQLite 路径启动 API。
+预览在 `http://127.0.0.1:4173`。构建时固定 API 地址和页面模式；改变它们后需要重新 build。只读模式初始不自动查询，缺失日期为“该日期尚无日报”，不提供生成或推送；真实操作模式见下文。API 和 Vite 终端均可 Ctrl+C 结束。测试期间留下的临时示例预览使用 `.runtime/api-smoke.sqlite3`、2026-09-25，只包含虚构数据；查看实际历史需自行用实际 SQLite 路径启动 API。
 
 前端测试（frontend 目录）：
 
@@ -71,7 +72,7 @@ npm run test:e2e
 
 Playwright 使用已安装的 Google Chrome；需要 Python 环境安装 `dev,web`，默认 `.runtime/venv/Scripts/python.exe`。其他 Python 路径可通过 `DAILY_REPORT_PYTHON` 指定。E2E 自动启动 8765/8766 两个 fixture API 及 5173 Vite，测试前需释放这些端口；不复用其他正在运行的服务。临时库仅位于 `.runtime/e2e/`，不会访问实际日报配置/数据库或发送通知。测试每次只重建自身固定的 fixture 文件。
 
-结果：15 项 Vitest、14 项 Playwright 通过，两种视口均无页面级横向溢出。首次 E2E 在受限进程环境中断言通过但服务清理未结束，Ctrl+C 后退出 1；允许本任务测试子进程正常清理后重跑，14 passed、退出 0。Playwright 有 NO_COLOR/FORCE_COLOR 的环境提示，断言及退出不受影响。
+v1.2.0 发布及最终复核：102 项 Vitest、只读 14 项和操作 26 项 Playwright 通过，两种视口均无页面级横向溢出。v1.1 的历史结果为 15 项 Vitest；首次 E2E 在受限进程环境中断言通过但服务清理未结束，Ctrl+C 后退出 1，重跑 14 passed、退出 0。最新环境污染复现、修复和退出结果见最终交付说明。Playwright 有 NO_COLOR/FORCE_COLOR 的环境提示，不据此声称没有警告。
 
 ## 锁定依赖与开源复用
 

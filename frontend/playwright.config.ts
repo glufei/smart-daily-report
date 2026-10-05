@@ -15,6 +15,6 @@ export default defineConfig({
   webServer: [
     { command: `"${python}" e2e/serve_fixture.py --port 8765`, url: 'http://127.0.0.1:8765/openapi.json', reuseExistingServer: false },
     { command: `"${python}" e2e/serve_fixture.py --port 8766 --broken`, url: 'http://127.0.0.1:8766/openapi.json', reuseExistingServer: false },
-    { command: `npm run dev -- --port ${port}`, url: `http://127.0.0.1:${port}`, env: { VITE_API_BASE_URL: 'http://127.0.0.1:8765' }, reuseExistingServer: false },
+    { command: `npm run dev -- --port ${port}`, url: `http://127.0.0.1:${port}`, env: { VITE_API_MODE: 'readonly', VITE_API_BASE_URL: 'http://127.0.0.1:8765' }, reuseExistingServer: false },
   ],
 });
