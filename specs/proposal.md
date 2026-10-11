@@ -1,8 +1,8 @@
 # 智能日报生成器需求规范（Proposal）
 
-- 版本：v1.4.0（2026-10-11，已在 GitHub 发布）；Task25–27 的每日日期规则、报告分组、时区显示及全量回归已在本机完成，尚未合并或发布。
-- 最新已发布版本：v1.4.0；v1.3.1及更早版本记录保留为历史证据。
-- 状态：Task15–27 及 R01–R12 的既有验收记录保留；Task25–27维护变更尚未合并或发布。v1.4.0发布记录见 `docs/frontend/v1.4.0-release.md`；日期规则、网页摘要和来源分组/时区记录分别见 `docs/frontend/daily-generation-calendar-tdd.md`、`docs/frontend/report-summary-web-tdd.md` 和 `docs/frontend/report-layout-timezone-tdd.md`。
+- 版本：v1.5.0（2026-10-11，PR #8 发布候选）；涵盖 Task25–27 的每日日期规则、报告分组及时区显示。
+- 上一已发布版本：v1.4.0；v1.3.1及更早版本记录保留为历史证据。
+- 状态：Task15–27 及 R01–R12 的既有验收记录保留；Task25–27 已完成实现和回归，当前由 PR #8 发布。历史发布记录见 `docs/frontend/v1.4.0-release.md`；日期规则、网页摘要和来源分组/时区记录分别见 `docs/frontend/daily-generation-calendar-tdd.md`、`docs/frontend/report-summary-web-tdd.md` 和 `docs/frontend/report-layout-timezone-tdd.md`。
 - 方法：依据《SDD 实战：规范驱动开发之道》第 4 章案例，并纳入本项目明确提出的约束
 
 ## v1.1 变更说明与确认记录

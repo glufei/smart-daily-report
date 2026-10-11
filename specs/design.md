@@ -1,9 +1,9 @@
 # 智能日报生成器架构设计（Design）
 
-- 版本：v1.4.0（2026-10-11，已在 GitHub 发布）；Task25–27的日期规则、来源分组和时区显示为本地未发布维护项。
+- 版本：v1.5.0（2026-10-11，PR #8 发布候选）；包含 Task25–27 的每日日期规则、来源分组和时区显示。
 - 维护状态：v1.3.0 通过 PR #4 发布；v1.3.1 通过 PR #5 合并并发布；v1.4.0 已发布，记录见 `docs/frontend/v1.4.0-release.md`。
-- 变更状态：Task25–27的实现、自动化回归及真实 Task26 仓库采集/页面核对均已完成；本地维护改动尚未合并或发布。
-- 状态：Task15–27及R01–R12的历史验收证据保留；Task25–27全量检查通过。只读 API 的版本元数据与项目版本一致为1.4.0；Task25–27后续发布版本号待发布准备时确定。
+- 变更状态：Task25–27 的实现、自动化回归及真实 Task26 仓库采集/页面核对均已完成；发布候选由 PR #8 提交。
+- 状态：Task15–27及R01–R12的历史验收证据保留；Task25–27全量检查通过。只读 API、Python 包及前端包版本统一为1.5.0。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 只读基线）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 操作基线与 v1.3 增量均已实现）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
