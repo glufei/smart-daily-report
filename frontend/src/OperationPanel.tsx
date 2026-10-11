@@ -207,6 +207,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
         <legend>邮件收件人（仅发送给勾选的邮箱）</legend>
         {preview.targets.email.recipients.map(address => <label key={address}><input type="checkbox" aria-label={address}
           checked={emailRecipients.includes(address)} onChange={event => { setConfirmation(null); setEmailRecipients(current => event.target.checked ? [...current, address].sort() : current.filter(value => value !== address)); }} />{address}</label>)}
+        <p aria-live="polite">已选择 {emailRecipients.length} 位邮件收件人</p>
         {!emailRecipients.length && <p id="email-recipient-hint">请选择至少一位邮件收件人</p>}
       </fieldset>}
       <button type="button" className="btn btn-primary" aria-describedby={channels.includes('email') && !emailRecipients.length ? 'email-recipient-hint' : undefined}

@@ -749,3 +749,13 @@ test.each(['accepted', 'partial_failure', 'unknown', 'pending'])('mixed_repeatab
   fireEvent.click(screen.getByRole('button', { name: '取消' }));
   expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
 });
+
+
+test('email_selection_count_explains_exactly_how_many_addresses_will_receive', async () => {
+  await setupRecipients();
+  expect(screen.getByText('已选择 0 位邮件收件人')).toBeVisible();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' }));
+  expect(screen.getByText('已选择 1 位邮件收件人')).toBeVisible();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'member@example.com' }));
+  expect(screen.getByText('已选择 2 位邮件收件人')).toBeVisible();
+});

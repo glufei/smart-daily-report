@@ -144,10 +144,10 @@ expect(JSON.parse(deliveryCall[1].body as string).email_recipients).toEqual(['me
 
 **Interfaces:** 复用 Task19 的 onPreview focus 与 Task20 的 DTO；fixture event 的 email 记录增加 `recipients: list[str]`（从 MIME To 读取），lark/既有 counts() 保持。每个测试比较自己前后增量；仅启动受控 fixture，不读取 config.yaml/.env。
 
-- [ ] **21.1 增加浏览器意图测试**：`email_selection_sends_only_confirmed_recipient`（默认未选、选择导师、确认框/事件仅导师、取消零发送）；`email_new_confirmation_resends_while_lark_stays_blocked`（同版本原键不重放、新确认邮箱可发、飞书不变）；`query_preview_feedback_timeout_and_keyboard_focus`（延迟显示、10 秒反馈、正文焦点、无横向溢出）；保持原 POST 丢失/原键恢复测试并核对目标不变。fixture 日志只含虚构目标。
-- [ ] **21.2 fixture/业务行为先失败再修复**：如果 fixture 未记录目标，先运行 test_operations_fixture.py 的新 `test_fixture_records_only_synthetic_selected_email_targets` 观察 RED，再只补测试替身记录，GREEN 后运行新 Playwright。若发现生产缺陷，新增正确原因 RED 后最小修复，不能先改代码再补验收。
-- [ ] **21.3 完整回归**：根目录 `& $taskPython -m pytest -q`，必须全部通过且 coverage ≥90%。前端依次 `npm test -- --run --coverage`、`npm run typecheck`、`npx playwright test --config playwright.config.ts`、`npx playwright test --config playwright.operations.config.ts`，全部退出 0，四个现有业务模块逐文件四项 ≥90%。依次设置 `$env:VITE_API_MODE='readonly'` / `'operations'` 后各运行 `npm run build`，两次退出 0；清理仅本轮公开环境变量。记录所有警告/失败和修复复验。
-- [ ] **21.4 实际运行与文档**：在真实本机配置下仅验证认证、邮箱选择展示、查询反馈和预览定位，不采集/通知除非另外授权。若需真实选择性推送，先展示版本和目标再获明确发送指令；零外部发送与未验收项如实记，不声称收件成功。README/local-run 更新单邮箱选择、独立确认、主动再次发送与 Gmail 垃圾邮件检查步骤，公共示例均用虚构地址。
+- [x] **21.1 增加浏览器意图测试**：`email_selection_sends_only_confirmed_recipient`（默认未选、选择导师、确认框/事件仅导师、取消零发送）；`email_new_confirmation_resends_while_lark_stays_blocked`（同版本原键不重放、新确认邮箱可发、飞书不变）；`query_preview_feedback_timeout_and_keyboard_focus`（延迟显示、10 秒反馈、正文焦点、无横向溢出）；保持原 POST 丢失/原键恢复测试并核对目标不变。fixture 日志只含虚构目标。
+- [x] **21.2 fixture/业务行为先失败再修复**：如果 fixture 未记录目标，先运行 test_operations_fixture.py 的新 `test_fixture_records_only_synthetic_selected_email_targets` 观察 RED，再只补测试替身记录，GREEN 后运行新 Playwright。若发现生产缺陷，新增正确原因 RED 后最小修复，不能先改代码再补验收。
+- [x] **21.3 完整回归**：根目录 `& $taskPython -m pytest -q`，必须全部通过且 coverage ≥90%。前端依次 `npm test -- --run --coverage`、`npm run typecheck`、`npx playwright test --config playwright.config.ts`、`npx playwright test --config playwright.operations.config.ts`，全部退出 0，四个现有业务模块逐文件四项 ≥90%。依次设置 `$env:VITE_API_MODE='readonly'` / `'operations'` 后各运行 `npm run build`，两次退出 0；清理仅本轮公开环境变量。记录所有警告/失败和修复复验。
+- [x] **21.4 实际运行与文档**：在真实本机配置下仅验证认证、邮箱选择展示、查询反馈和预览定位，不采集/通知除非另外授权。若需真实选择性推送，先展示版本和目标再获明确发送指令；零外部发送与未验收项如实记，不声称收件成功。README/local-run 更新单邮箱选择、独立确认、主动再次发送与 Gmail 垃圾邮件检查步骤，公共示例均用虚构地址。
 - [ ] **21.5 完成审查与交付**：逐项映射 N01–N06、Task19–21；执行 requesting-code-review 与 verification-before-completion，按已选本会话执行方式做一次独立整体审查，再处理确认的问题并复验。真实收件若仍缺保留未验收；不要据旧 1.2.0 证据补勾本轮。通过门槛后由 finishing-a-development-branch 准备审查/合并材料，版本和 GitHub 交付方式在具体结果可审查后确定；不改原 v1.2.0 tag。
 
 ## 计划自审与当前 checkpoint（2026-10-11）

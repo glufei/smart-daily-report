@@ -1,7 +1,7 @@
 # 智能日报生成器架构设计（Design）
 
 - 版本：v1.2（2026-10-01）
-- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19完成，目标选择尚未实现。
+- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19–20完成，Task21完整回归与审查进行中。
 - 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.2.0（2026-10-05），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见版本说明。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已实现、真实业务验收通过）
@@ -95,9 +95,9 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 - 现有机器人实现只检查旧 `StatusCode` 并默认缺失为 0；v1.2 按平台文档核对新 `code` 与旧字段，明确失败码、矛盾字段或缺失成功证据不能算成功。现有 SMTP 未处理 `send_message()` 返回的部分拒绝收件人，也列入 Task 17 的先失败测试。
 - 来源的成员/顶层重复状态仍沿用 §3 的顶层约定；不趁本轮清理无关模型。Notifier 的“不确定发送”安全语义优先于旧的笼统重试规则，只作相关最小修订并补 CLI 回归。
 
-### 1.6 下一轮操作反馈与邮件目标选择（规范已确认，尚未实现）
+### 1.6 下一轮操作反馈与邮件目标选择（已实现，完整回归与审查进行中）
 
-上游为 proposal §8/N01–N06；决策见 [ADR-006](adrs/006-operation-feedback-email-selection.md)，具体字段及迁移见 [操作契约 §7](contracts/web-operations.md)。本节是待实现增量，§1.4 的固定目标和整邮件渠道重复限制保留为 v1.2 历史规则，实施后按本节明确替换，不同时应用两种规则。
+上游为 proposal §8/N01–N06；决策见 [ADR-006](adrs/006-operation-feedback-email-selection.md)，具体字段及迁移见 [操作契约 §7](contracts/web-operations.md)。本节是已实现增量，§1.4 的固定目标和整邮件渠道重复限制保留为 v1.2 历史规则，实施后按本节明确替换，不同时应用两种规则。
 
 **前端反馈**：沿用 React 状态、现有 fetch/Zod 与请求票据，不增加 UI/状态依赖。查询、预览各自设置动作提示与按钮加载文案；提示放在按钮附近并以 aria-live/role=status 提供反馈，出错可用 role=alert。查询完成时间使用浏览器完成本次请求的本地时间（展示时区），与服务器 created_at/updated_at 和 report_date 分开；查询 null 清空操作记录并显示暂无记录。预览成功由 App 的正文标题 ref 完成焦点与滚动；通过 tabIndex=-1 支持程序焦点，尊重减少动画偏好。焦点移动仅由用户主动预览成功触发，恢复状态/轮询不抢焦点。旧 ticket、日期、Token 失效后不能更新动作反馈或移动焦点。
 
@@ -113,7 +113,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 
 ## 2. 技术决策与 ADR
 
-ADR-006（下一轮规范已确认，计划待审）：见 [`adrs/006-operation-feedback-email-selection.md`](adrs/006-operation-feedback-email-selection.md)，记录可选配置邮箱、邮件主动再次发送与请求去重的边界。
+ADR-006（规范及计划已确认，已实现待最终审查）：见 [`adrs/006-operation-feedback-email-selection.md`](adrs/006-operation-feedback-email-selection.md)，记录可选配置邮箱、邮件主动再次发送与请求去重的边界。
 
 ADR-005（v1.2 已确认）：见 [`adrs/005-superpowers-tdd.md`](adrs/005-superpowers-tdd.md)，明确 Superpowers 是开发流程工具、SDD 文档是真实需求来源；实施计划审查后执行严格 RED/GREEN/REFACTOR、审查和完成前验证。新增浏览器操作沿用 §1.4 的轻量方案。
 
