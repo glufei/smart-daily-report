@@ -2,7 +2,7 @@
 
 从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再分别列出 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。日报会标注由系统自动生成；网页预览、邮件 HTML 与飞书 Markdown 使用一致的来源分组，历史日报按其保存内容展示，不会自动重算。
 
-当前待发布版本：**v1.5.0（PR #8）**；发布后请从 [GitHub Releases](https://github.com/glufei/smart-daily-report/releases) 获取稳定版本。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。v1.5.0 合并每日生成规则、GitHub/飞书分组、团队时区显示及 Windows 浏览器测试进程修复。当前完整验证为 Python 332 项、前端 145 项、只读/操作浏览器 14＋38 项；两种浏览器测试均正常退出，`npm audit` 未发现漏洞。详见 [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)、[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)、[日期规则 TDD 记录](docs/frontend/daily-generation-calendar-tdd.md)和[网页摘要 TDD 记录](docs/frontend/report-summary-web-tdd.md)。
+当前已发布版本：**[v1.5.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.5.0)**。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。v1.5.0 合并每日生成规则、GitHub/飞书分组、团队时区显示及 Windows 浏览器测试进程修复。当前完整验证为 Python 332 项、前端 145 项、只读/操作浏览器 14＋38 项；两种浏览器测试均正常退出，`npm audit` 未发现漏洞。详见 [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)、[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)、[日期规则 TDD 记录](docs/frontend/daily-generation-calendar-tdd.md)和[网页摘要 TDD 记录](docs/frontend/report-summary-web-tdd.md)。
 
 v1.5.0 在“今日总结”基础上，允许周末与配置节假日生成日报，并在日报正文和页面上清晰区分 GitHub 提交与飞书任务/工作消息；生成时间按团队时区显示，底层仍保存 UTC。升级时前后端须一起更新；v1.2.0、v1.3.0、v1.3.1 和 v1.4.0 的历史标签及发布内容保持不变。详见 [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)、[v1.4.0 版本说明](docs/frontend/v1.4.0-release.md)和[维护验证记录](docs/frontend/report-layout-timezone-tdd.md)。
 
@@ -304,7 +304,7 @@ npm run test -- --run --coverage
 npm run build
 ```
 
-浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.5.0 候选版本回归：Python **332 项 / 覆盖率 95.24%**，前端 **145 项**，只读/操作浏览器 **14＋38 项**；两种 Playwright 命令均以退出码 0 完成，`npm audit` 为 **0 个漏洞**。完整命令和边界见[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)及[v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)。
+浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.5.0 发布版本回归：Python **332 项 / 覆盖率 95.24%**，前端 **145 项**，只读/操作浏览器 **14＋38 项**；两种 Playwright 命令均以退出码 0 完成，`npm audit` 为 **0 个漏洞**。完整命令和边界见[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)及[v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)。
 
 ## 文档导航
 
@@ -312,7 +312,7 @@ npm run build
 | --- | --- |
 | [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
 | [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md) / [维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md) | 发布后维护修复、测试证据和版本交付记录 |
-| [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md) / [Task27 验收记录](docs/frontend/report-layout-timezone-tdd.md) | 最新发布候选的变更、测试边界、来源分组和时区验收 |
+| [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md) / [Task27 验收记录](docs/frontend/report-layout-timezone-tdd.md) | v1.5.0 发布版的变更、测试边界、来源分组和时区验收 |
 | [需求规范](specs/proposal.md) / [架构设计](specs/design.md) / [任务清单](specs/tasks.md) | SDD 的需求、技术方案、任务依赖和验收标准 |
 | [本机运行说明](docs/frontend/local-run.md) | 模式切换、构建预览、测试命令及本机路径 |
 | [配置指南](docs/frontend/v1.2-configuration-163-feishu.md) | 163 SMTP、GitHub、飞书凭证与配置示例 |
