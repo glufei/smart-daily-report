@@ -1,10 +1,10 @@
 # 智能日报生成器
 
-从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再列出「代码提交 / 任务进展 / 协作沟通」明细，保存到 SQLite，并按需发送邮件和飞书通知。
+从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再分别列出 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。日报会标注由系统自动生成；网页预览、邮件 HTML 与飞书 Markdown 使用一致的来源分组，历史日报按其保存内容展示，不会自动重算。
 
-当前本地源码版本：**v1.4.0（未发布）**；最新 GitHub 发布版本仍为 [v1.3.1](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.1)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。v1.4.0 变更和本地验证见[版本变更记录](docs/frontend/v1.4.0-release.md)及[Task24 TDD记录](docs/frontend/report-summary-tdd.md)。
+当前待发布版本：**v1.5.0（PR #8）**；发布后请从 [GitHub Releases](https://github.com/glufei/smart-daily-report/releases) 获取稳定版本。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。v1.5.0 合并每日生成规则、GitHub/飞书分组、团队时区显示及 Windows 浏览器测试进程修复。当前完整验证为 Python 332 项、前端 145 项、只读/操作浏览器 14＋38 项；两种浏览器测试均正常退出，`npm audit` 未发现漏洞。详见 [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)、[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)、[日期规则 TDD 记录](docs/frontend/daily-generation-calendar-tdd.md)和[网页摘要 TDD 记录](docs/frontend/report-summary-web-tdd.md)。
 
-v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前逐地址确认。v1.3.1 修复超时后旧请求可能干扰新请求、飞书异常发送者字段绕过校验的问题，并更新受安全公告影响的前端开发依赖。升级时前后端须一起更新；原 v1.2.0、v1.3.0 标签保持不变。详见 [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md)、[v1.3.0 版本说明](docs/frontend/v1.3-release.md)和[维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md)。
+v1.5.0 在“今日总结”基础上，允许周末与配置节假日生成日报，并在日报正文和页面上清晰区分 GitHub 提交与飞书任务/工作消息；生成时间按团队时区显示，底层仍保存 UTC。升级时前后端须一起更新；v1.2.0、v1.3.0、v1.3.1 和 v1.4.0 的历史标签及发布内容保持不变。详见 [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)、[v1.4.0 版本说明](docs/frontend/v1.4.0-release.md)和[维护验证记录](docs/frontend/report-layout-timezone-tdd.md)。
 
 ## 先选择你要做什么
 
@@ -65,7 +65,7 @@ npm run dev
 | 操作 | 使用方法 | 是否发送通知 |
 | --- | --- | --- |
 | 查看已有日报 | 选择日期 → 点击「查看日报」；无需令牌 | 否，也不重新采集 |
-| 采集并生成 | 输入 `.env` 中的 `DAILY_REPORT_WEB_TOKEN` →「验证令牌」→ 选择工作日 →「采集并生成」 | 否，只采集、保存和预览 |
+| 采集并生成 | 输入 `.env` 中的 `DAILY_REPORT_WEB_TOKEN` →「验证令牌」→ 选择任意日期 →「采集并生成」 | 否，只采集、保存和预览 |
 | 发送日报 | 验证令牌 →「预览日报」→ 核对内容 → 选择渠道和具体邮箱 →「推送日报」→ 核对弹窗地址 →「确认推送」 | 是，发送已确认的版本 |
 | 查看执行进度 | 验证令牌后点击「查询执行结果」，查看操作日期、状态与本次查询时间 | 否 |
 
@@ -167,7 +167,7 @@ if (-not (Test-Path -LiteralPath 'config.yaml')) {
 
 | 配置项 | 填写内容 |
 | --- | --- |
-| `team.github_repositories` | 仓库名，例如 `your-name/your-repo` |
+| `team.github_repositories` | 一个或多个仓库名，例如 `[your-name/repo-a, your-name/repo-b]`；只有列出的仓库会被采集 |
 | `team.lark_project_ids` | 已授权的飞书**任务清单 GUID**，不是单条任务 GUID |
 | `team.lark_chat_ids` | 应用可读取的来源群 ID；与推送 Webhook 的目标群分别配置 |
 | `members` | 团队成员及其 GitHub / 飞书身份映射 |
@@ -231,9 +231,9 @@ $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
 ```
 
-打开 **[http://127.0.0.1:5173](http://127.0.0.1:5173)**，按[页面使用步骤](#3-在页面上使用)操作：**验证令牌 → 选择工作日 → 采集生成 → 核对预览 → 独立确认推送**。首次运行没有历史日报，点击「查看日报」出现“该日期尚无日报”是正常结果；需先采集生成。
+打开 **[http://127.0.0.1:5173](http://127.0.0.1:5173)**，按[页面使用步骤](#3-在页面上使用)操作：**验证令牌 → 选择日期 → 采集生成 → 核对预览 → 独立确认推送**。任意有效日期（包括周末及配置节假日）都可以生成和推送。首次运行没有历史日报，点击「查看日报」出现“该日期尚无日报”是正常结果；需先采集生成。
 
-修改 `.env` 或 `config.yaml` 后，需要在窗口 A 停止后端，再重新加载环境变量并启动。飞书任务按所选日期的完成时间筛选；周末和配置假日跳过生成与推送。
+修改 `.env` 或 `config.yaml` 后，需要在窗口 A 停止后端，再重新加载环境变量并启动。飞书任务按所选日期的完成时间筛选。旧配置中的 `team.holidays` 字段仍可读取，但不会阻止任意日期的生成或推送。
 
 ## 五、只读模式与命令行
 
@@ -246,6 +246,14 @@ Set-Location 'E:\MyCode\smart-daily-report'
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 .\.runtime\venv\Scripts\python.exe -m smart_daily_report.web.main --database '.\data\reports.sqlite3'
 ```
+
+只读查询的“生成时间”默认按 UTC 显示。若希望页面使用团队本地时区，可显式指定 IANA 时区，例如：
+
+```powershell
+.\.runtime\venv\Scripts\python.exe -m smart_daily_report.web.main --database '.\data\reports.sqlite3' --timezone 'Asia/Shanghai'
+```
+
+`--timezone` 只改变 API/页面的时间表示，不修改 SQLite 中保存的 UTC 时间；操作模式则自动使用 `config.yaml` 的 `team.timezone`。
 
 前端使用第三节窗口 B 的命令（`VITE_API_MODE='readonly'`）。只读模式不需要操作令牌或外部凭证，不提供生成与推送，也不会自动创建缺失的历史库。
 
@@ -261,7 +269,7 @@ $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 .\.runtime\venv\Scripts\python.exe -m smart_daily_report.main --config '.\config.yaml' --date 2026-10-05 --dry-run
 ```
 
-把日期改为自己的实际工作日。CLI 去掉 `--dry-run` 会直接向已配置渠道发送；需要先预览再确认时，使用浏览器操作模式。
+把日期改为要采集的任意有效日期。CLI 去掉 `--dry-run` 会直接向已配置渠道发送；需要先预览再确认时，使用浏览器操作模式。
 
 ## 常见问题
 
@@ -296,7 +304,7 @@ npm run test -- --run --coverage
 npm run build
 ```
 
-浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.3.1 发布验收：Python **322 项 / 95.30% 覆盖率**，前端 **141 项**，只读/操作浏览器 **14＋38 项**；前端语句/分支/函数/行覆盖率为 **97.54%/95.03%/98.86%/100%**。v1.2.0 发布时的 286 项 Python、102 项前端及 14＋26 项浏览器结果保留为历史记录。完整命令和边界见[维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md)。
+浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.5.0 候选版本回归：Python **332 项 / 覆盖率 95.24%**，前端 **145 项**，只读/操作浏览器 **14＋38 项**；两种 Playwright 命令均以退出码 0 完成，`npm audit` 为 **0 个漏洞**。完整命令和边界见[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)及[v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)。
 
 ## 文档导航
 
@@ -304,6 +312,7 @@ npm run build
 | --- | --- |
 | [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
 | [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md) / [维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md) | 发布后维护修复、测试证据和版本交付记录 |
+| [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md) / [Task27 验收记录](docs/frontend/report-layout-timezone-tdd.md) | 最新发布候选的变更、测试边界、来源分组和时区验收 |
 | [需求规范](specs/proposal.md) / [架构设计](specs/design.md) / [任务清单](specs/tasks.md) | SDD 的需求、技术方案、任务依赖和验收标准 |
 | [本机运行说明](docs/frontend/local-run.md) | 模式切换、构建预览、测试命令及本机路径 |
 | [配置指南](docs/frontend/v1.2-configuration-163-feishu.md) | 163 SMTP、GitHub、飞书凭证与配置示例 |

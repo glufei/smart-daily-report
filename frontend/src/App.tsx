@@ -15,37 +15,66 @@ function RecordLink({ url, children }: { url: string | null; children: ReactNode
 function Section({ title, status, children, empty }: {
   title: string; status: SourceStatus[keyof SourceStatus] | 'disabled' | 'pending'; children: ReactNode; empty: boolean;
 }) {
-  return <section className="block"><h4 className="block-label">{title}</h4>
+  return <section className="block"><h5 className="block-label">{title}</h5>
     {status === 'disabled' ? <p className="record-empty">未启用</p> : status === 'pending' ? <p>正在采集…</p> : status === 'failure' ? <p className="record-failed">数据获取失败</p>
       : empty ? <p className="record-empty">今日无记录</p> : <ul className="records">{children}</ul>}
   </section>;
 }
 
+function formatTimestamp(timestamp: string) {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(timestamp);
+  if (!match) return timestamp;
+  const offset = match[3] === 'Z' ? '+00:00' : match[3];
+  return `${match[1]} ${match[2]}（UTC${offset}）`;
+}
+
 function ReportContent({ report, sources: outcomes, headingRef }: { report: Report; sources?: PreviewView['sources']; headingRef?: RefObject<HTMLHeadingElement | null> }) {
   const status = (key: keyof SourceStatus) => outcomes?.[key]?.status ?? report.source_status[key];
+  const summaryValue = (key: keyof SourceStatus, count: number) => {
+    const value = status(key);
+    if (value === 'failure') return '获取失败，数量未知';
+    if (value === 'disabled') return '未启用';
+    if (value === 'pending') return '正在采集…';
+    return `${count} 条`;
+  };
   const failures = sources.filter(([key]) => status(key) === 'failure').map(([, label]) => label);
   return <div className="report">
     {failures.length > 0 && <div className="banner" role="status"><strong>部分数据源获取失败：{failures.join('、')}</strong>
       <p>日报已加载，对应板块显示“数据获取失败”。</p></div>}
     {outcomes === null && <p>来源启用情况未记录</p>}
     <header className="report-head"><h2 ref={headingRef} tabIndex={-1} className="report-team">{report.team_name}</h2>
+      <p className="report-origin-note">本日报由系统自动生成，内容依据已配置并成功采集的数据。</p>
       <dl className="report-meta"><div><dt>报告日期</dt><dd>{report.report_date}</dd></div>
-        <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{report.generated_at.replace('T', ' ')}（{report.generated_at.endsWith('Z') ? 'UTC+00:00' : `UTC${report.generated_at.slice(-6)}`}）</time></dd></div></dl>
+        <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{formatTimestamp(report.generated_at)}</time></dd></div></dl>
       <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
     </header>
     <div className="members">{report.members.map(member => <article className="member" key={member.member_id} aria-label={member.display_name}>
       <h3 className="member-name">{member.display_name}</h3><div className="blocks">
-        <Section title="代码提交" status={status('github_commits')} empty={member.commits.length === 0}>
-          {member.commits.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}><span className="code">{record.repository}</span>：{record.message}</RecordLink>
-            <small>{record.committed_at} · +{record.additions} / −{record.deletions} · {record.files_changed} 个文件</small></li>)}
-        </Section>
-        <Section title="任务进展" status={status('lark_tasks')} empty={member.tasks.length === 0}>
-          {member.tasks.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.title}（{record.status === 'completed' ? '已完成' : record.status}）</RecordLink>
-            <small>{record.changed_at}{record.status_from !== null && record.status_to !== null ? ` · ${record.status_from} → ${record.status_to}` : ''}</small></li>)}
-        </Section>
-        <Section title="协作沟通" status={status('lark_messages')} empty={member.messages.length === 0}>
-          {member.messages.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.content}</RecordLink><small>{record.sent_at}{record.chat_name ? ` · ${record.chat_name}` : ''}</small></li>)}
-        </Section>
+        <section className="block member-summary" aria-label="今日总结"><h4 className="block-label">今日总结</h4>
+          <p className="summary-note">系统自动统计：仅依据下方成功采集的记录，不作人工编辑或 AI 推断。</p>
+          <ul className="summary-list">
+            <li>代码提交：{summaryValue('github_commits', member.commits.length)}</li>
+            <li>已完成任务：{summaryValue('lark_tasks', member.tasks.length)}</li>
+            <li>协作沟通：{summaryValue('lark_messages', member.messages.length)}</li>
+          </ul>
+        </section>
+        <section className="source-group" aria-label="GitHub｜代码提交">
+          <h4 className="source-group-title">GitHub｜代码提交</h4>
+          <Section title="提交明细" status={status('github_commits')} empty={member.commits.length === 0}>
+            {member.commits.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}><span className="code">{record.repository}</span>：{record.message}</RecordLink>
+              <small>{record.committed_at} · +{record.additions} / −{record.deletions} · {record.files_changed} 个文件</small></li>)}
+          </Section>
+        </section>
+        <section className="source-group" aria-label="飞书｜任务与工作消息">
+          <h4 className="source-group-title">飞书｜任务与工作消息</h4>
+          <Section title="任务进展" status={status('lark_tasks')} empty={member.tasks.length === 0}>
+            {member.tasks.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.title}（{record.status === 'completed' ? '已完成' : record.status}）</RecordLink>
+              <small>{record.changed_at}{record.status_from !== null && record.status_to !== null ? ` · ${record.status_from} → ${record.status_to}` : ''}</small></li>)}
+          </Section>
+          <Section title="工作消息" status={status('lark_messages')} empty={member.messages.length === 0}>
+            {member.messages.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.content}</RecordLink><small>{record.sent_at}{record.chat_name ? ` · ${record.chat_name}` : ''}</small></li>)}
+          </Section>
+        </section>
       </div>
     </article>)}</div>
   </div>;

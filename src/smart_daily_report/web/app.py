@@ -4,9 +4,11 @@ import hmac
 import logging
 import re
 import sqlite3
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Sequence
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -15,6 +17,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .. import __version__
 from ..shared.logging import new_run_id
 from ..shared.storage import get_report
 from .schemas import ErrorResponse, ReportView
@@ -43,10 +46,13 @@ def _error(status: int, code: str, run_id: str, *, operation: bool = False) -> J
 
 def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "localhost"), *,
                operations=None, operation_token: str | None = None,
-               allowed_origins: Sequence[str] = ALLOWED_ORIGINS) -> FastAPI:
+               allowed_origins: Sequence[str] = ALLOWED_ORIGINS,
+               display_timezone: str | None = None) -> FastAPI:
     """Read a fixed database; no collectors, notifiers or secret configuration."""
-    app = FastAPI(title="智能日报只读接口", version="1.3.0", docs_url=None, redoc_url=None)
+    app = FastAPI(title="智能日报只读接口", version=__version__, docs_url=None, redoc_url=None)
     database = db_path.resolve()
+    timezone_name = display_timezone or "UTC"
+    display_zone = ZoneInfo(timezone_name)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
     app.add_middleware(CORSMiddleware, allow_origins=list(allowed_origins),
                        allow_methods=["GET", "POST", "OPTIONS"] if operations is not None else ["GET"],
@@ -100,6 +106,9 @@ def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "loca
             report = get_report(database, day)
             if report is None:
                 return _error(404, "report_not_found", run_id)
+            if report.generated_at.tzinfo is None or report.generated_at.utcoffset() is None:
+                raise ValueError("generated_at must include a timezone")
+            report = replace(report, generated_at=report.generated_at.astimezone(display_zone))
             view = ReportView.model_validate(report)
         except (sqlite3.Error, OSError):
             return _error(500, "storage_read_failed", run_id)

@@ -16,12 +16,71 @@ test('viewing saved history preserves every member and the distinction between e
   expect(screen.getByText(/UTC\+08:00/)).toBeInTheDocument();
   for (const name of ['示例成员甲', '示例成员乙']) {
     const member = screen.getByRole('article', { name });
-    expect(within(member).getAllByRole('heading', { level: 4 }).map(el => el.textContent)).toEqual(['代码提交', '任务进展', '协作沟通']);
+    expect(within(member).getAllByRole('heading', { level: 4 }).map(el => el.textContent)).toEqual(['今日总结', 'GitHub｜代码提交', '飞书｜任务与工作消息']);
     expect(within(member).getByText('数据获取失败')).toBeInTheDocument();
   }
   expect(within(screen.getByRole('article', { name: '示例成员乙' })).getAllByText('今日无记录')).toHaveLength(2);
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'GET', cache: 'no-store', credentials: 'omit' });
+});
+
+test('shows a deterministic summary before each member’s source details', async () => {
+  const report = reportFixture();
+  const secondMember = report.members[1];
+  secondMember.commits = []; secondMember.tasks = []; secondMember.messages = [];
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+
+  const first = within(screen.getByRole('article', { name: '示例成员甲' }));
+  const summary = first.getByRole('region', { name: '今日总结' });
+  expect(within(summary).getByText('代码提交：1 条')).toBeInTheDocument();
+  expect(within(summary).getByText('已完成任务：1 条')).toBeInTheDocument();
+  expect(within(summary).getByText('协作沟通：1 条')).toBeInTheDocument();
+  expect(first.getAllByRole('heading', { level: 4 }).map(el => el.textContent)).toEqual([
+    '今日总结', 'GitHub｜代码提交', '飞书｜任务与工作消息',
+  ]);
+  expect(first.getAllByRole('heading', { level: 5 }).map(el => el.textContent)).toEqual([
+    '提交明细', '任务进展', '工作消息',
+  ]);
+
+  const second = within(screen.getByRole('article', { name: '示例成员乙' }));
+  const emptySummary = second.getByRole('region', { name: '今日总结' });
+  expect(within(emptySummary).getByText('代码提交：0 条')).toBeInTheDocument();
+  expect(within(emptySummary).getByText('已完成任务：0 条')).toBeInTheDocument();
+  expect(within(emptySummary).getByText('协作沟通：0 条')).toBeInTheDocument();
+});
+
+test('separates GitHub from Feishu and labels summaries as automatic', async () => {
+  const report = reportFixture();
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  const member = screen.getByRole('article', { name: '示例成员甲' });
+  expect(within(member).getByText(/系统自动统计/)).toBeInTheDocument();
+  expect(within(member).getByRole('region', { name: 'GitHub｜代码提交' })).toBeInTheDocument();
+  const feishu = within(member).getByRole('region', { name: '飞书｜任务与工作消息' });
+  expect(within(feishu).getByRole('heading', { name: '任务进展' })).toBeInTheDocument();
+  expect(within(feishu).getByRole('heading', { name: '工作消息' })).toBeInTheDocument();
+  expect(within(feishu).getByText('完成页面契约评审（已完成）')).toBeInTheDocument();
+  expect(within(feishu).getByText('日报：已完成只读页面原型')).toBeInTheDocument();
+  expect(screen.getByText(/本日报由系统自动生成/)).toBeInTheDocument();
+});
+
+test('renders generated time in the timezone returned by the API', async () => {
+  const report = reportFixture();
+  report.generated_at = '2026-09-25T18:00:00+08:00';
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  expect(screen.getByText('2026-09-25 18:00:00（UTC+08:00）')).toBeInTheDocument();
+});
+
+test('summary reports failed source counts as unknown instead of zero', async () => {
+  const report = reportFixture();
+  report.source_status.github_commits = 'failure'; report.members[0].commits = [];
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  const summary = within(screen.getByRole('article', { name: '示例成员甲' })).getByRole('region', { name: '今日总结' });
+  expect(within(summary).getByText('代码提交：获取失败，数量未知')).toBeInTheDocument();
+  expect(within(summary).queryByText('代码提交：0 条')).not.toBeInTheDocument();
 });
 
 test.each([

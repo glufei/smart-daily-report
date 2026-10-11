@@ -1,8 +1,8 @@
 # 智能日报生成器任务清单
 
-- 版本：v1.4.0（2026-10-11，本地未发布）
-- 当前状态：Task19–21 已随 v1.3.0 发布；Task22 维护修复已完成并通过独立审查；Task23 已完成 v1.3.1 合并、发布和本机同步；Task24 已完成 v1.4.0 日报总结变更及本地回归。
-- 状态：Task15–24 及 R01–R12 已验收；真实 GitHub 提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；v1.4.0 本地变更记录见 `docs/frontend/v1.4.0-release.md`，v1.3.1 交付见 `docs/frontend/v1.3.1-release.md`。
+- 版本：v1.5.0（2026-10-11，PR #8 发布候选）；Task25–27维护变更已完成回归。
+- 当前状态：Task19–21 随 v1.3.0 发布；Task22/23 随 v1.3.1 完成；Task24 随 v1.4.0 完成并发布；Task25–27代码、自动化验收及Task26真实来源/页面核对均已完成。
+- 状态：Task15–27及R01–R12既有验收证据保留；Task25–27由 PR #8 交付。v1.4.0 历史记录见 `docs/frontend/v1.4.0-release.md`；维护验证见三个对应的 Task25、Task26、Task27 TDD 记录。
 - 任务原则：一个任务对应一个可验证交付物；每项验收标准可观察且二值化。
 - 执行依据：`proposal.md`、`design.md`、`contracts/`。
 
@@ -353,8 +353,8 @@ Task 14（历史基线） → Task 15（操作基础 + GitHub 生成预览）
 - [x] Task6/17-C：Markdown外部文本不生成额外链接、标题、标签或强调；目的地址不能闭合模板链接；原始成员内容与固定推送快照保持。
 - [x] 上述修改严格TDD：消息RED11/GREEN（另2项防御已有行为直接通过）、详情限流RED2（另4项不重试保护直接通过）、详情分页RED5、MarkdownRED2；全部修改先失败后实现，新增26项意图测试。
 - [x] 修复后pytest286/95.03%，前端102且逐文件四项≥90%，typecheck和两模式build通过，只读14/操作26顺序回归通过，CLI入口正常；工具路径启动失败与既有警告如实记录。
-- [ ] Task18/R03：仍须真实工作日消息经源平台、成员映射、SQLite/API/React核对；周末消息和fixture不能代替。
-- [ ] Task18/R12：该证据齐备后再提升1.2.0、完成版本一致性检查与GitHub交付。当前版本1.1.0，未合并main、未推送或发布。
+- [x] Task18/R03：真实工作日消息已按源平台、成员映射、SQLite/API/React核对；证据见 `docs/frontend/v1.2-acceptance.md` 与最终交付记录。
+- [x] Task18/R12：真实消息验收完成后，v1.2.0 已完成版本核对与 GitHub 交付；历史发布证据见 `docs/frontend/v1.2-release.md` 和 `docs/frontend/v1.2-final-handover.md`。
 
 本轮 [完成情况审查](../docs/frontend/v1.2-completion-audit.md) 是当前总览；原checkpoint保留其历史时间，不把当时缺项当作当前缺项。
 
@@ -483,3 +483,62 @@ proposal §8 → design §1.6 / ADR-006 / web-operations §7 → 用户规范审
 ### 2026-10-11 需求 checkpoint
 
 用户确认采用“规则归纳＋明细”：成员摘要按源状态计数，保留原始明细，不引入 AI。规范已更新。TDD RED：2 个新增测试按预期因模板无“今日总结”而失败；实现后的首轮测试发现测试断言未考虑 Markdown 转义且既有安全测试的标题数需要更新，修正断言后 7 项生成器测试通过。全量 pytest 为 324 passed、95.35% 覆盖率；`git diff --check` 通过。随后将本地源码元数据提升至 1.4.0，最新 GitHub 发布版本仍为 v1.3.1；按用户授权创建本地提交，未推送或创建远程 Release。详细命令及 warning 见 `docs/frontend/report-summary-tdd.md`。
+
+## Task 25：允许每日生成、预览与推送
+
+- **前置依赖**：v1.4.0 已正式发布；用户确认移除周末与配置法定节假日的生成/推送拦截，保留所有其他安全和业务校验。
+- **范围**：CLI 与浏览器操作模式对任意有效日期执行采集/生成；对已保存并预览的任意日期日报允许推送。`team.holidays` 字段保留读取以兼容现有配置，但不得影响运行决策。保留旧操作记录中历史 `skipped/non_workday` 状态的读取能力，不再创建新的日期跳过结果。版本号及 GitHub 发布安排待本任务验证后确定。
+- **输出**：日期策略规范、接口契约、README/本机操作说明、意图测试和 TDD RED/GREEN 记录。
+- **验收 Checklist**：
+  - [x] **严格遵循 TDD，必须先编写失败的单元/集成测试用例，再实现通过测试的业务代码。** 测试须证明周末和配置节假日的 CLI 生成、Web 生成及 Web 推送均进入正常流程；RED/GREEN 见 `docs/frontend/daily-generation-calendar-tdd.md`。
+  - [x] CLI 在周末及配置节假日采集启用来源、生成并保存日报；不返回跳过。
+  - [x] Web 生成在周末及配置节假日完成来源调用并返回成功结果；不新建 `skipped/non_workday`。
+  - [x] 已存在且版本匹配的日报在周末及配置节假日可接受所选推送；渠道未配置仍按原规则拒绝，其他拒绝路径由既有回归覆盖。
+  - [x] 前端现有日期输入允许选择任意有效日期，没有按星期或配置节假日禁用；历史 `skipped/non_workday` 操作展示回归通过。
+  - [x] `config.yaml.example`、README、proposal、design、接口契约和本机运行说明均说明 `team.holidays` 不拦截生成/推送；旧配置仍可读取。
+  - [x] 目标 RED/GREEN、全量 Python/前端测试、类型检查和构建均通过；离线测试未被表述为真实外部收件验收。
+
+### 2026-10-11 日期规则变更 checkpoint
+
+用户确认方案：任何有效日期均可生成、预览、推送；保留令牌、版本、渠道、收件人和预览确认校验。6 个参数化场景按预期 RED 后，移除 CLI 生成和 Web 推送的日期门禁，目标测试 6 passed。完整 pytest 327 passed、95.27%；Vitest 141 passed；前端 typecheck/build 通过。`docs/frontend/daily-generation-calendar-tdd.md` 记录 RED/GREEN 和唯一既有弃用警告。本地文档与变更尚未提交或发布；后续版本号待确定。
+
+## Task 26：网页显示今日总结并扩展 GitHub 采集仓库
+
+- **前置依赖**：Task24 的确定性成员总结规则已发布；Task25 已验证任意有效日期生成；用户确认保留 `glufei/Lab-Attendance-System` 并新增 `glufei/smart-daily-report`。
+- **范围**：React 页面在逐成员来源明细前显示“今日总结”，按已保存 DTO 中三类记录数组和来源状态显示计数；实际本机运行配置新增第二仓库。改配置不重写历史日报，不改变 API、模型、数据库或推送副作用。只有重启后端并对目标日期重新采集生成，新的仓库范围才会进入新日报。
+- **输出**：前端摘要组件与意图测试、运行配置更新、Proposal/Design/README/本机运行说明更新、TDD 记录。
+- **验收 Checklist**：
+  - [x] **严格遵循 TDD，必须先编写失败的单元/集成测试用例，再实现通过测试的业务代码。** RED 测试因缺少“今日总结”区域失败；证据见 `docs/frontend/report-summary-web-tdd.md`。
+  - [x] 每位成员明细前有“今日总结”；三个数量顺序固定为提交、已完成任务、协作沟通，来源成功时按该成员当前记录数呈现。
+  - [x] 来源失败显示“获取失败，数量未知”，不显示零；来源禁用/采集中分别给出独立状态。
+  - [x] 测试覆盖有记录、正常零记录和来源失败；既有历史日报 GET、详情展示回归通过。
+  - [x] 前端 API、DTO、SQLite schema、后端采集/推送调用均未因摘要展示而变化；历史快照未被重写。
+  - [x] 实际配置同时包含 `glufei/Lab-Attendance-System` 和 `glufei/smart-daily-report`，既有仓库及其他配置保留。
+  - [x] 前端全量 Vitest 143 项通过，typecheck 和 production build 通过。
+  - [x] 配置更新后重启服务并重新生成 2026-10-11；运行记录确认 GitHub 来源失败、飞书来源成功，页面明确显示失败且数量未知，未将失败误报为零。
+  - [x] 为两个指定仓库配置 `Contents: Read-only` 的 fine-grained Token；GitHub API 对 `glufei/smart-daily-report` 和 `glufei/Lab-Attendance-System` 均返回 HTTP 200。
+  - [x] 使用真实配置重新生成 2026-10-11 日报；GitHub 来源成功并收集 17 条项目仓库提交，飞书任务/消息来源成功且各 0 条；SQLite/API 记录一致，未发送通知。
+  - [x] React 页面显示“今日总结：提交 17 条、已完成任务 0 条、协作沟通 0 条”，并展示 17 条逐条提交；三个来源均显示获取成功，浏览器无页面异常。
+
+### 2026-10-11 Task26 checkpoint
+
+初次验收 checkpoint：本机配置新增 `glufei/smart-daily-report` 后，旧 Token 对私有仓库返回404；前端正确显示获取失败而非零。TDD、143项前端测试、类型检查与构建已通过。随后用户更换为仅含两个目标仓库只读权限的 Token，真实数据最终验收见下方 checkpoint；本轮没有邮件/飞书推送。
+
+### 2026-10-11 Task26 真实数据验收 checkpoint
+
+新 Token 未在聊天或文档中展示。两个仓库 API 均 HTTP 200；按 `Asia/Shanghai` 的 2026-10-11 日期窗口，生成器从 `glufei/smart-daily-report` 采集并保存 17 条提交，`glufei/Lab-Attendance-System` 当日 0 条；飞书任务与消息均读取成功、各 0 条。真实 CLI 使用 `--dry-run` 写入日报数据库，邮件和飞书发送次数均为 0。真实 FastAPI 在 `127.0.0.1:8000` 提供该记录，React 页面 `127.0.0.1:5173` 显示三源成功、“今日总结”17/0/0及17条提交明细；无浏览器页面错误。Task26真实采集和页面验收完成；日期规则/摘要代码仍是本地变更，未提交、合并或发布。
+
+## Task 27：日报来源分组及团队时区显示（本地实现完成，未发布）
+
+- **前置依赖**：Task25/26 的本地变更通过全量自动化回归；沿用既有 `MemberReport`、三类来源状态、React 报告页和 Markdown/HTML 模板，不引入新采集器。
+- **范围**：将成员日报改成“今日总结 → GitHub｜代码提交 → 飞书｜任务与工作消息（任务进展、工作消息）”；说明系统自动统计与原始来源明细。配置模式查询按 `team.timezone` 投影 `generated_at`；只读数据库模式支持 `--timezone`，缺省 UTC。底层数据库仍存 UTC，既有快照不回写。
+- **交付物**：网页、邮件 HTML、飞书 Markdown 一致的来源分组；明确的自动生成说明；跨输出时区可靠且历史只读的生成时间展示；规范/运行文档和 TDD 验收记录。
+- **验收 Checklist**：
+  - [x] Markdown 和 HTML 测试验证“系统自动统计”、GitHub/飞书一级来源分组、提交明细/任务/工作消息子标题及记录/空状态/失败状态。
+  - [x] 前端测试验证组标题、自动生成与自动统计说明、飞书子标题、原有数字/明细及失败不冒充零。
+  - [x] 配置模式 API 返回配置时区偏移（`+08:00`），存储仍与原 UTC 时间点相同；只读 `--timezone Asia/Shanghai` 返回相同本地时间，缺省时保留 UTC。
+  - [x] Markdown/HTML 与 React 对同一报告显示相同来源类别、明细类别和空/失败语义；外部字段转义、链接安全继续通过。
+  - [x] 严格遵循 TDD：模板、前端自动生成说明、API/CLI 时区行为先观察 RED，再实现并验证 GREEN；完整过程见 `docs/frontend/report-layout-timezone-tdd.md`。
+  - [x] Python 全量 331 项通过、覆盖率 95.23%；前端全量 145 项通过、行覆盖率 100%/分支覆盖率 94.89%；类型检查、构建、`git diff --check` 通过。
+  - [x] 只读 14 项及操作模式 38 项 Playwright 断言通过，且两个 Windows Playwright 进程均自然退出（退出码 0）；操作模式使用合成边界，fixture 未发送真实通知。根因和生命周期修复见 `docs/frontend/report-layout-timezone-tdd.md`。
+  - [x] 更新 `specs/proposal.md`、`specs/design.md`、`specs/contracts/http-api.md`、运行说明和 README；只读验收确认 SQLite 字节未改变。
