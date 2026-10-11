@@ -99,7 +99,7 @@ generate_daily_report(
 ) -> DailyReport
 ```
 
-Generator 不调用外部 API，不决定重试，不生成 AI 摘要。它必须按模型中的来源状态显示“数据获取失败”或“今日无记录”，并对外部文本做安全转义。
+Generator 不调用外部 API，不决定重试，不生成 AI 自然语言摘要。成员区块先按 `DailyReport.source_status` 确定性统计代码提交、完成任务和已过滤协作消息，再展示三类来源明细；来源成功但成员无记录显示“0 条”，来源失败显示“获取失败，数量未知”，不得把失败计为零。Markdown 与 HTML 的总结和明细必须一致，并继续对外部文本做安全转义。
 
 ## Notifier
 

@@ -8,6 +8,14 @@ from urllib.parse import quote, urlparse
 from ..shared.models import CollectResultStatus, MemberReport
 
 SECTIONS = (("代码提交", "commits", "github_commits"), ("任务进展", "tasks", "lark_tasks"), ("协作沟通", "messages", "lark_messages"))
+SUMMARY_LABELS = (("代码提交", "commits", "github_commits"), ("已完成任务", "tasks", "lark_tasks"), ("协作沟通", "messages", "lark_messages"))
+
+
+def _summary_value(member: MemberReport, attr: str, source: str,
+                   source_status: Mapping[str, CollectResultStatus]) -> str:
+    if source_status.get(source, "success") == "failure":
+        return "获取失败，数量未知"
+    return f"{len(getattr(member, attr))} 条"
 
 
 def safe_url(url: str | None) -> str | None:
@@ -32,6 +40,10 @@ def render_markdown(report_date: date, team_name: str, members: Sequence[MemberR
     lines = [f"# {_markdown_text(team_name)} 日报（{report_date.isoformat()}）", ""]
     for member in members:
         lines.extend((f"## {_markdown_text(member.display_name)}", ""))
+        lines.extend(("### 今日总结", ""))
+        for label, attr, source in SUMMARY_LABELS:
+            lines.append(f"- {label}：{_summary_value(member, attr, source, source_status)}")
+        lines.append("")
         for title, attr, source in SECTIONS:
             lines.extend((f"### {title}", ""))
             if source_status.get(source, "success") == "failure":
@@ -61,6 +73,11 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
     output = [f"<h1>{html.escape(team_name)} 日报（{report_date.isoformat()}）</h1>"]
     for member in members:
         output.append(f"<h2>{html.escape(member.display_name)}</h2>")
+        output.append("<h3>今日总结</h3><ul>")
+        for label, attr, source in SUMMARY_LABELS:
+            value = f"{label}：{_summary_value(member, attr, source, source_status)}"
+            output.append(f"<li>{html.escape(value)}</li>")
+        output.append("</ul>")
         for title, attr, source in SECTIONS:
             output.append(f"<h3>{title}</h3>")
             if source_status.get(source, "success") == "failure":

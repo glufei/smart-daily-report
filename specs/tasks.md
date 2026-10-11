@@ -1,8 +1,8 @@
 # 智能日报生成器任务清单
 
-- 版本：v1.3.1（2026-10-11）
-- 当前状态：Task19–21 已随 v1.3.0 发布；Task22 维护修复已完成并通过独立审查；Task23 已完成 v1.3.1 合并、发布和本机同步。
-- 状态：Task15–23及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；交付与发布记录见 `docs/frontend/v1.3.1-release.md`。
+- 版本：v1.4.0（2026-10-11，本地未发布）
+- 当前状态：Task19–21 已随 v1.3.0 发布；Task22 维护修复已完成并通过独立审查；Task23 已完成 v1.3.1 合并、发布和本机同步；Task24 已完成 v1.4.0 日报总结变更及本地回归。
+- 状态：Task15–24 及 R01–R12 已验收；真实 GitHub 提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；v1.4.0 本地变更记录见 `docs/frontend/v1.4.0-release.md`，v1.3.1 交付见 `docs/frontend/v1.3.1-release.md`。
 - 任务原则：一个任务对应一个可验证交付物；每项验收标准可观察且二值化。
 - 执行依据：`proposal.md`、`design.md`、`contracts/`。
 
@@ -465,3 +465,21 @@ proposal §8 → design §1.6 / ADR-006 / web-operations §7 → 用户规范审
   - [x] PR #5 已由 GitHub 合并至 main，合并提交为 `d3abf5ec33fad38d3a3222cdef6e1473c78cecff`；仓库未配置 GitHub Actions 检查。
   - [x] v1.3.1 标签指向 PR #5 合并提交，GitHub Release 已发布；v1.3.0 标签与 Release 未修改。
   - [x] 本机 main 已快进同步并验证测试、构建、依赖审计和文档链接；本机状态及发布链接见 `docs/frontend/v1.3.1-release.md`。
+
+## Task 24：增加清晰、确定性的成员日报总结
+
+- **前置依赖**：用户已确认“规则归纳＋明细”方案；Proposal §2.1/§2.2/§3/§10、Design §1.7、Generator 接口契约已同步定义总结内容、来源状态和兼容边界。
+- **范围**：调整 Markdown 与 HTML 模板，在每位成员的三类来源明细前显示提交、已完成任务和协作消息计数。来源失败写“获取失败，数量未知”，成功但无记录写“0 条”。不引入 AI、模型字段、HTTP API、采集行为；不回写既有历史日报，不改变邮件/飞书发送流程。将 Python/npm 源码版本更新至 1.4.0；此任务只创建本地提交，不推送 GitHub 或创建远程 Release。
+- **输出**：Generator 模板及其意图测试、README/运行说明更新、RED/GREEN 与全量回归 checkpoint。
+- **验收 Checklist**：
+  - [x] **严格遵循 TDD，必须先编写失败的单元/集成测试用例，再实现通过测试的业务代码。** 有记录、正常零记录和来源失败状态的 Markdown/HTML 总结均有意图测试；正确原因的 RED 与后续 GREEN 记录见 `docs/frontend/report-summary-tdd.md`。
+  - [x] 每位成员区块顺序为“今日总结 → 代码提交 → 任务进展 → 协作沟通”；摘要仅展示三类记录数，不产生自然语言推断。
+  - [x] 成功来源按该成员记录计数；没有记录显示 `0 条`；失败来源显示 `获取失败，数量未知` 且不显示为零；单来源失败时其余成功来源仍按记录计数。
+  - [x] Markdown 与 HTML 的总结计数、来源状态、明细内容一致；现有 HTML/Markdown 注入、链接、外部文本转义测试全部通过。
+  - [x] SQLite 数据模型、HTTP API、采集/推送副作用均未修改；既有历史快照由现有存储路径读取，不执行迁移/改写。
+  - [x] 生成器测试 GREEN；全量 pytest 324 项通过，覆盖率 95.35%；README 和本机运行说明解释计数及失败/零记录差别。最终命令结果和既有单个 Starlette 弃用警告见 `docs/frontend/report-summary-tdd.md`。
+  - [x] `pyproject.toml`、`frontend/package.json` 和 lockfile 源包元数据均为 1.4.0；版本说明区分本地源码与最新已发布 v1.3.1。
+
+### 2026-10-11 需求 checkpoint
+
+用户确认采用“规则归纳＋明细”：成员摘要按源状态计数，保留原始明细，不引入 AI。规范已更新。TDD RED：2 个新增测试按预期因模板无“今日总结”而失败；实现后的首轮测试发现测试断言未考虑 Markdown 转义且既有安全测试的标题数需要更新，修正断言后 7 项生成器测试通过。全量 pytest 为 324 passed、95.35% 覆盖率；`git diff --check` 通过。随后将本地源码元数据提升至 1.4.0，最新 GitHub 发布版本仍为 v1.3.1；按用户授权创建本地提交，未推送或创建远程 Release。详细命令及 warning 见 `docs/frontend/report-summary-tdd.md`。

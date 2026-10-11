@@ -1,7 +1,8 @@
 # 智能日报生成器架构设计（Design）
 
-- 版本：v1.3.1（2026-10-11）
+- 版本：v1.4.0（2026-10-11，本地未发布）
 - 维护状态：v1.3.0 通过 PR #4 发布；v1.3.1 通过 PR #5 合并并发布。Task22 修复不增加 API 端点或改变 v1.3.0 行为契约，版本和交付证据见 `docs/frontend/v1.3.1-release.md`。
+- 变更状态：Task24 的模板实现已在本地完成，全量 pytest 通过；元数据已更新至 v1.4.0，本地提交及版本变更记录见 `docs/frontend/v1.4.0-release.md`，尚未推送或发布。
 - 状态：Task15–23及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 只读基线）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 操作基线与 v1.3 增量均已实现）
@@ -23,13 +24,17 @@ GitHub ─────┐
 | 模块 | 负责 | 不负责 |
 |---|---|---|
 | `collector/` | GitHub 提交、飞书任务和消息的 API 访问、分页、源数据解析；每个来源独立返回成功/失败结果 | 身份聚合、日报格式、推送 |
-| `generator/` | 接收聚合后的成员报告，按固定三段结构生成 Markdown 和 HTML | 外部 API 调用、秘密读取、消息采集 |
+| `generator/` | 接收聚合后的成员报告，确定性生成成员数量总结及三类来源明细的 Markdown 和 HTML | 外部 API 调用、秘密读取、消息采集、AI 自然语言推断 |
 | `notifier/` | 将既有 DailyReport 分别发送至 SMTP 与飞书机器人并报告投递结果 | 数据采集、内容生成、SQLite 查询 |
 | `shared/` | 配置与账号映射校验、工作日判断、敏感词过滤、错误类型、JSON 日志、SQLite 存储、共享 HTTP 策略 | 具体数据源业务与日报模板 |
 | `main.py` | 命令行入口、确定性编排、部分失败降级、退出码 | 将业务判断委托给模型或隐藏在模块副作用中 |
 | `web/`（v1.2 增量） | HTTP 鉴权/校验、只读投影、调用既有生成/推送能力、记录操作结果 | 在浏览器采集源数据、重做映射/过滤、自动重发不确定通知 |
 
 `generator/formatter.py` 负责校验数据状态并组装 DailyReport；`generator/template.py` 负责 Markdown/HTML 模板渲染与外部链接安全处理。
+
+### 1.7 日报可读性迭代（v1.4.0 本地实现）
+
+每位成员区块按“今日总结 → 代码提交 → 任务进展 → 协作沟通”顺序渲染。总结直接计数 `MemberReport` 的提交、完成任务和已过滤消息记录，并结合 `DailyReport.source_status` 处理来源不确定性：来源成功且成员列表为空显示 `0 条`；来源失败显示 `获取失败，数量未知`；有记录时显示确定数量。Markdown 与 HTML 共用相同的计数/状态规则，不增加模型字段、接口、外部服务或推断性语言。模板只影响新生成的 DailyReport，SQLite 中既有 Markdown/HTML 快照及 API 历史结果不回写。
 
 ### 1.2 v1.1 前后端分离（历史设计，继续约束只读模式）
 
