@@ -1,8 +1,8 @@
 # 智能日报生成器
 
-从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成「代码提交 / 任务进展 / 协作沟通」日报，保存到 SQLite，并按需发送邮件和飞书通知。
+从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再列出「代码提交 / 任务进展 / 协作沟通」明细，保存到 SQLite，并按需发送邮件和飞书通知。
 
-当前版本：[v1.3.1](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.1)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
+当前本地源码版本：**v1.4.0（未发布）**；最新 GitHub 发布版本仍为 [v1.3.1](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.1)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。v1.4.0 变更和本地验证见[版本变更记录](docs/frontend/v1.4.0-release.md)及[Task24 TDD记录](docs/frontend/report-summary-tdd.md)。
 
 v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前逐地址确认。v1.3.1 修复超时后旧请求可能干扰新请求、飞书异常发送者字段绕过校验的问题，并更新受安全公告影响的前端开发依赖。升级时前后端须一起更新；原 v1.2.0、v1.3.0 标签保持不变。详见 [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md)、[v1.3.0 版本说明](docs/frontend/v1.3-release.md)和[维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md)。
 
