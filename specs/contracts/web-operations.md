@@ -1,6 +1,7 @@
 # v1.2 本机生成、预览与推送 HTTP 契约
 
 - 版本/状态：2026-10-05，操作契约已实现；Task18真实工作日消息页面验收及v1.2.0全量回归通过，发布记录见docs/frontend/v1.2-release.md。
+- 下一轮增量：2026-10-11，§7 为操作反馈与可选邮件目标的待审契约。§1–6 保留 v1.2 已发布基线；新实现中与 §7 冲突的邮箱输入/展示、邮件跨请求阻断由 §7 替换，当前运行产品尚未改变。
 - 上游：`proposal.md` R01–R12；`design.md` §1.4–§1.5；ADR-005
 - 兼容基线：[`http-api.md`](http-api.md) 的 GET / ReportView 不变；所有本文件新接口仅在操作模式启用
 
@@ -123,3 +124,70 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 - 机器人成功必须有明确合法业务成功码；HTTP 200 的非零 code、缺字段、矛盾字段和非法 JSON 不算 accepted。缺少可信响应时保守 unknown，不自动再发。
 - SMTP 检查所有配置收件人的受理结果；连接/login 成功不是发送成功，send_message 部分拒绝不能算全渠道 accepted。发送之后的超时可能已受理，保守 unknown；只在可证明未发送的暂时错误上重试。
 - 离线 pytest/Vitest/Playwright 通过不证明真实集成完成；真实验收需源数据核对和两个通知目标实际收件证据。任何无样本/权限不足/网络失败保留未完成，不用旧记录替代。
+
+## 7. 下一轮增量：可选邮件目标与交互反馈（2026-10-11，待审）
+
+### 7.1 PreviewView 与地址可见范围
+
+路由与鉴权保持。`targets.email` 保留 enabled/label/previous，增加必需字段 `recipients: list[str]`，内容来自服务器 smtp.recipients，按配置顺序去重；未启用邮件时为空。仅认证后的预览返回实际邮箱，不返回 SMTP 凭证，不在公共历史 GET、错误正文或日志展示。`targets.lark` 保持原结构及固定标签。
+
+虚构示例：
+
+```json
+{
+  "email": {
+    "enabled": true,
+    "label": "邮件（2 位可选收件人）",
+    "previous": null,
+    "recipients": ["member@example.com", "mentor@example.com"]
+  },
+  "lark": {"enabled": true, "label": "配置的日报群", "previous": null}
+}
+```
+
+`previous` 仍是邮件渠道同版本最近结果，不表示任一特定收件人的结果。本轮不创建逐邮箱状态或重复阻断；页面默认未勾选邮箱、勾选后显示所选人数及实际地址。旧结果的 accepted/partial_failure/unknown 不禁用新邮件选择，必须仍提供独立确认和重复风险提示。
+
+### 7.2 DeliveryRequest 的严格目标选择
+
+`POST /api/v1/deliveries` 增加 `email_recipients: list[str]`，默认为空数组；选择 email 时必须提供非空数组，仅飞书时必须为空。示例仅向一位邮箱与飞书发送：
+
+```json
+{
+  "report_date": "2026-10-05",
+  "report_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "channels": ["email", "lark"],
+  "email_recipients": ["mentor@example.com"]
+}
+```
+
+- 每个邮箱必须为非空字符串且与当前配置地址完全一致；不允许前端新地址、额外空格/换行或近似匹配，不做模糊大小写映射。SMTP 配置本身不是浏览器可写数据。
+- 数组禁止重复，合法请求规范化排序，排序进入指纹/保存记录/发送调用；同一选择的不同输入顺序是同内容。
+- 选择 email 而省略/为空/类型非法/重复为 400 invalid_request；未选 email 却携带非空列表同样 400。配置外邮箱为 400 recipient_not_configured，固定文案“所选邮箱不在服务器配置中”；禁止回显恶意地址。
+- 已启用邮件的配置包含可用目标；所选渠道未配置仍为 400 channel_not_configured。所有即时拒绝均零通知、零新操作执行，不回退向全体邮箱发送。
+- 保留禁止客户端传正文、Webhook、Token、路径、强制忽略日期/版本等字段的规则；旧客户端邮件请求缺少目标返回 400，新旧前后端须配套启动。
+
+### 7.3 目标快照与 OperationView 兼容
+
+新增 `email_recipients: list[str] | null`：
+
+- 新 delivery 操作选择 email 时是确认后的非空规范化列表；仅飞书为 `[]`；generation 为 null。
+- 在接受事务中随请求指纹和 payload 保存；后台从接受记录读取目标，不能在执行时改为完整 smtp.recipients。一次 SMTP 调用只传本次列表，邮件 To 与发送信封目标一致。
+- 新键接受前校验当前配置白名单和日报版本；重放已存在键则先比较指纹并返回原记录，不因后来配置改变重写已接受的目标。
+- 原操作库已有 payload 缺少字段，服务端读取默认 null，前端严格解析允许 null，并提示“历史记录未记录具体收件人”。不回填当前邮箱，不重写旧行或改日报表。
+- 地址属于认证接口的目标元数据，不扩展 SafeErrorCode 或用邮箱装入错误信息；固定 `recipient_not_configured` 仅为同步拒绝码。渠道结果继续使用原 DeliveryOutcome 聚合语义。
+
+### 7.4 邮件主动再次发送与不变的请求边界
+
+1. 邮件允许相同 report_date/report_revision 使用新幂等键主动再次推送，包括旧邮件结果 accepted/partial_failure/unknown；没有按收件人或地址组合的额外阻断。确认框展示本次目标和“再次推送可能产生重复邮件”。旧结果 unknown 额外提醒先核实原投递，状态不能被解释为明确失败。
+2. 每次新邮件请求均由用户选择目标、点击推送并确认。已接受操作 pending、原请求尚未确认或已有活动槽时，新提交仍禁用/拒绝；不能用新键恢复丢失响应。
+3. 同键同规范化 kind/日期/版本/渠道/邮箱选择只执行一次；同键改变任一字段 409 idempotency_conflict。网络断线、超时、500/响应不可解析时继续查询原键，不自动 POST；明确由用户重试原请求仍用同键同内容。
+4. 飞书仍按同版本渠道历史 accepted/partial_failure/unknown/pending 阻断。邮件与不可重发飞书的组合请求整体 409 delivery_not_repeatable、零发送；取消飞书后可以提交仅邮件的新请求。
+5. 版本匹配、工作日规则、原子活动槽、重启中断/未知恢复及无自动续跑保持。当前操作新请求不修改历史渠道终态，服务商受理与实际收件依旧分开。
+
+### 7.5 查询/预览的页面反馈契约
+
+- 用户主动查询：开始时按钮/就近状态显示正在查询；成功时显示本次查询完成时间和时区，同时展示操作类型、实际 report_date/状态及服务器时间。null 表示暂无执行记录，清除旧执行卡片，不显示“令牌已验证”冒充查询反馈。
+- 用户主动预览：开始时显示加载；成功显示日期/完成并定位正文标题，focus 与 scroll 只属于本次有效请求；404/网络/鉴权错误分别显示现有安全文案。后台恢复或轮询自动预览不移动焦点。
+- 查询与主动预览的 GET 等待沿用历史查询 10 秒上限，到期停止浏览器等待并显示重新查询/预览的提示；不执行 POST、不取消后端操作。后台操作 120 秒自动观察上限保持。
+- 相同结果重复查询也更新本次查询时间；日期/Token 变化及失效 ticket 的迟到响应不能覆盖提示、内容或焦点。原键断线恢复、鉴权失效清理和旧确认失效规则保持。
+- 操作预览失败不会使旧展示成为有效推送预览；存在已加载的只读历史内容时允许保留展示，但必须明确“预览未就绪”，推送依据只能是当前成功的 controlPreview。
