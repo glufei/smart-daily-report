@@ -1,8 +1,8 @@
 # 智能日报生成器任务清单
 
 - 版本：v1.3.1（2026-10-11）
-- 当前状态：Task19–21 已随 v1.3.0 发布；Task22 发布后维护修复已完成并通过独立审查；Task23 跟踪 v1.3.1 的 PR、合并、发布及本地同步。
-- 状态：Task15–22及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；交付与发布记录见 `docs/frontend/v1.3.1-release.md`。
+- 当前状态：Task19–21 已随 v1.3.0 发布；Task22 维护修复已完成并通过独立审查；Task23 已完成 v1.3.1 合并、发布和本机同步。
+- 状态：Task15–23及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；交付与发布记录见 `docs/frontend/v1.3.1-release.md`。
 - 任务原则：一个任务对应一个可验证交付物；每项验收标准可观察且二值化。
 - 执行依据：`proposal.md`、`design.md`、`contracts/`。
 
@@ -462,6 +462,6 @@ proposal §8 → design §1.6 / ADR-006 / web-operations §7 → 用户规范审
 - **验收 Checklist**：
   - [x] `pyproject.toml`、`frontend/package.json` 与 lockfile 版本一致为 1.3.1；依赖无额外变更，README 中作者本机源代码路径指向合并后的 main 目录。
   - [x] Release 说明明确变更、测试结果、历史 v1.3.0 边界和实际收件未验收限制；proposal/design/contracts/tasks 与代码状态一致。
-  - [ ] PR 已创建并由 GitHub 合并至 main；PR 检查及合并提交已核实。
-  - [ ] v1.3.1 标签指向 PR 合并后的 main 提交，GitHub Release 已发布；v1.3.0 标签与 Release 未修改。
-  - [ ] 本机 main 已快进同步 origin/main 至同一合并提交，工作区干净；在合并结果上完成全量测试、构建、依赖审计和文档链接检查。
+  - [x] PR #5 已由 GitHub 合并至 main，合并提交为 `d3abf5ec33fad38d3a3222cdef6e1473c78cecff`；仓库未配置 GitHub Actions 检查。
+  - [x] v1.3.1 标签指向 PR #5 合并提交，GitHub Release 已发布；v1.3.0 标签与 Release 未修改。
+  - [x] 本机 main 已快进同步并验证测试、构建、依赖审计和文档链接；本机状态及发布链接见 `docs/frontend/v1.3.1-release.md`。
