@@ -15,11 +15,11 @@
 | 验证 | 实际结果 | 边界 |
 | --- | --- | --- |
 | Python全量 | 314 passed，95.24%，退出0 | 包含采集、CLI、Notifier、API、事务和选择目标；外部服务使用替身 |
-| 前端全量 | 133 passed，退出0 | 未跳过测试，四个业务文件保留原统计范围 |
-| 前端覆盖率 | statements97.42%、branches95.23%、functions98.82%、lines100% | api.ts/operations.ts四项各100%；App.tsx/OperationPanel.tsx逐文件四项均≥90% |
+| 前端全量 | 135 passed，退出0 | 未跳过测试，四个业务文件保留原统计范围 |
+| 前端覆盖率 | statements97.47%、branches95.29%、functions98.83%、lines100% | api.ts/operations.ts四项各100%；App.tsx/OperationPanel.tsx逐文件四项均≥90% |
 | 类型与构建 | typecheck及readonly/operations两模式build退出0 | 同一代码树、既有锁定依赖 |
 | 只读浏览器 | mobile/desktop共14 passed，退出0 | 数据库不变、零采集/通知、安全内容和键盘查询 |
-| 操作浏览器 | mobile/desktop共36 passed，退出0 | 真实FastAPI/SQLite/Chromium；HTTP/SMTP边界受控；375×812、1440×900均无页面横向溢出 |
+| 操作浏览器 | mobile/desktop共38 passed，退出0 | 真实FastAPI/SQLite/Chromium；HTTP/SMTP边界受控；375×812、1440×900均无页面横向溢出 |
 | 本机配置核对 | 认证GET、两个邮箱初始未选、单选确认/取消、查询反馈和正文焦点通过 | 使用实际配置和既有日报数据库副本；原数据库字节不变；零上游调用、零POST与通知 |
 | 本轮真实选择性邮件收件 | **未验收** | 尚未另行授权发送，不能用SMTP替身或旧v1.2.0双渠道收件证据代替 |
 
@@ -34,7 +34,7 @@
 | N03 精确邮箱选择 | test_selected_email_recipient_is_the_only_smtp_target、test_email_selection_invalid_inputs_send_nothing、email_selection_requires_explicit_recipient_and_confirmation、email_selection_lark_only_sends_empty_address_list、email_selection_count_explains_exactly_how_many_addresses_will_receive；浏览器email_selection_sends_only_confirmed_recipient |
 | N04 新邮件请求/原请求/飞书 | test_email_new_key_can_resend_same_revision_but_lark_cannot、test_selected_recipients_are_canonical_idempotency_content、lost_delivery_response_keeps_confirmed_recipient_snapshot_on_explicit_original_retry、mixed_repeatable_email_and_blocked_lark；浏览器email_new_confirmation_resends_while_lark_stays_blocked、post_response_loss_no_resubmit |
 | N05 历史与目标快照 | test_target_snapshot_and_replay_do_not_use_changed_config、test_legacy_operation_has_unknown_targets_without_database_rewrite、legacy_target_is_not_inferred_from_current_preview；新目标仅在受保护接口可见 |
-| N06 SDD/TDD和交付 | proposal→design/ADR-006/contracts→tasks→已确认实施计划；各阶段真实RED/GREEN、完整回归、README及local-run；最终独立审查结果随后记录 |
+| N06 SDD/TDD和交付 | proposal→design/ADR-006/contracts→tasks→已确认实施计划；各阶段真实RED/GREEN、完整回归、README及local-run；最终独立审查及修复见下文 |
 
 ## 本机启动与发送
 
@@ -44,4 +44,28 @@
 
 ## 当前交付状态
 
-Task19–20完成；Task21的实现、全套验证和运行材料已准备，最终独立审查与GitHub交付决定按Superpowers收尾。真实选择性收件保留为未验收，不影响对本轮受控测试已通过的事实描述；不会未经本轮授权发送给真实收件人。代码本地保存，尚未替换作者正在运行的服务、推送分支、合并main或新增Release。
+Task19–21的开发、全套验证、独立审查修复和运行材料已完成；GitHub合并/发布方式待用户选择。真实选择性收件保留为未验收，不影响对本轮受控测试已通过的事实描述；不会未经本轮授权发送给真实收件人。代码本地保存，尚未替换作者正在运行的服务、推送分支、合并main或新增Release。
+
+
+## 最终独立审查与修复
+
+新上下文审查 main e1417c3 至 71bd4be，报告 Critical 0 / Important 1 / Minor 1。重要问题为执行结果 GET 已成功，但随后附带的预览挂起会把它误报成查询超时；失败刷新还会保留旧发送依据。先运行两项意图测试，RED 2 failed（正确原因），再最小修复为查询成功立即显示本次完成时间，附带预览有独立10秒提示，刷新前清除旧操作预览及目标选择。GREEN 2 passed；两视口浏览器复现均通过。
+
+修复后重新全量验证：Python314/95.24%、前端135及四模块四项≥90%、只读浏览器14、操作浏览器38、类型及两模式构建均退出0；实际本机GET-only核对再次通过。未派发第二次审查，用先失败测试与完整回归验证这一次修复。原有历史正文可以继续显示，但不构成推送预览。
+
+**Deferred minors（延期小项）**：specs/contracts/interfaces.md 第169行增量标题仍写“尚未实现”，其末段含未来时态。按执行工作流保留为小项，未混入本轮重要问题修复；当前实现状态以本文件、proposal/design/tasks/web-operations/ADR-006为准。
+
+## Rulings I made（按执行顺序）
+
+| 序号 | 裁决及原因 | 若判断错误的代价 |
+| --- | --- | --- |
+| 1 | 建立新的托管隔离工作区；旧v1.2工作区含私人运行环境及较旧代码 | 多一个源码路径和工作区需要管理 |
+| 2 | 空记录使用current GET的null；已知操作ID保留404契约 | 若需ID查询为空，需显式契约迁移 |
+| 3 | 旧邮件新键阻断与已确认再次发送需求冲突；沿用飞书阻断和原键未知/中断不自动执行测试 | 主动再次发送可能产生重复邮件 |
+| 4 | 最终审查未判断的同版本邮件再次发送/不按收件人去重，按用户明确选择保留并提示风险 | 可能收到重复邮件 |
+| 5 | 旧邮件客户端缺目标返回400；要求前后端配套升级 | 旧客户端在升级前不能发送邮件 |
+| 6 | 最终审查的已知操作ID null疑问仍沿用404、current才可null | 需求改变时须迁移契约 |
+| 7 | 操作者配置地址的异常SMTP解析保留既有可信配置边界；浏览器不能新增地址 | 畸形配置可能产生非预期SMTP地址解析，尚不证明浏览器白名单绕过 |
+| 8 | 真实选择性收件仍未验收，不未经独立授权发送 | 收件端问题只能在实际收件核对时发现 |
+| 9 | 独立审查没有重跑全部测试；实施者读取完整回归输出，审查者独立复现重要问题 | 环境问题可能需要再复现 |
+| 10 | 既有预览失败保留旧依据纳入重要问题，一起在刷新前清除 | 历史正文仍可能可见，但不能据它推送 |

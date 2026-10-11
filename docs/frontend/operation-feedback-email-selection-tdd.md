@@ -39,3 +39,11 @@
 - Python全量314 passed/95.24%、既有警告1；typecheck及readonly/operations build退出0；只读浏览器14 passed/退出0。操作浏览器36 passed/退出0，人数补充后再次完整复验，不以旧截图代替最终代码。
 - 实际配置只读核对：使用两个真实配置邮箱及10/5已保存日报的数据库副本，认证、查询完成、预览正文焦点、初始未选和单地址确认/取消通过；原数据库字节不变；无采集、POST或实际通知。脚本首次遗漏显式127.0.0.1绑定、随后团队和成员同名导致标题定位歧义；沿用项目启动绑定、限定二级标题后通过，均为工具错误，不计RED。
 - README/local-run明确当前代码和配置目录、选择单邮箱、独立确认、邮件主动再次发送、飞书限制、原请求恢复与Gmail垃圾邮件核对。公共截图/fixture仅虚构地址。真实选择性收件未授权、未验收；版本仍1.2.0，旧标签不变，GitHub交付待选择。
+
+
+## 最终审查的一次TDD修复与收尾
+
+- 独立审查发现查询成功后附带预览等待混入查询超时；刷新失败的旧发送依据属于同一问题。先新增 successful_query_is_not_misreported_by_attached_preview_timeout/failure，RED2 failed（缺即时查询完成/旧预览仍可发送），退出1。然后最小修改查询完成时机、独立预览超时和刷新前失效；GREEN2 passed，退出0。
+- 修复后全量前端135 passed，statements97.47%、branches95.29%、functions98.83%、lines100%；仍统计原四文件，每文件四项≥90%。Python314 passed/95.24%、警告1；类型/两模式build、只读14和操作38浏览器均退出0。新增浏览器 successful_query_keeps_completion_when_attached_preview_times_out 在两视口通过。
+- 实际配置及数据库副本再次GET-only核对通过：候选2位均未选、选一位确认/取消、查询反馈和正文焦点；原数据库字节不变、零上游调用、零真实通知。实际选择性收件仍未验收。
+- 最终裁决和延期小项完整保存在 [验收与交付说明](operation-feedback-email-selection-acceptance.md)。本轮开发审查已结束，GitHub交付/新版本选择尚未执行；原v1.2.0不改。

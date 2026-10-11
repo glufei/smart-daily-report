@@ -280,3 +280,22 @@ test('query_preview_feedback_timeout_and_keyboard_focus', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '联调示例团队' })).toBeInViewport();
   expect(await counts()).toEqual(before); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+
+test('successful_query_keeps_completion_when_attached_preview_times_out', async ({ page }) => {
+  await authenticate(page); await generate(page); const before = await counts();
+  await selectFixtureRecipient(page); await page.clock.install();
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/reports/*/preview', async route => { await gate; await route.continue().catch(() => {}); });
+  await page.getByRole('button', { name: '查询执行结果', exact: true }).click();
+  await expect(page.getByText(/执行结果查询完成/)).toBeVisible();
+  await expect(page.getByLabel('本次查询时间', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '推送日报', exact: true })).toHaveCount(0);
+  await page.clock.fastForward(10000);
+  await expect(page.getByText('日报预览请求超时，请点击“预览日报”重试。')).toBeVisible();
+  await expect(page.getByText(/执行结果查询完成/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '查询执行结果', exact: true })).toBeEnabled(); release();
+  await page.unroute('**/api/v1/reports/*/preview');
+  await expect(page.getByRole('button', { name: '推送日报', exact: true })).toHaveCount(0);
+  expect(await counts()).toEqual(before);
+});

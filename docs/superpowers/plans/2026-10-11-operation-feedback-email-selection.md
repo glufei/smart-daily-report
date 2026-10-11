@@ -148,7 +148,7 @@ expect(JSON.parse(deliveryCall[1].body as string).email_recipients).toEqual(['me
 - [x] **21.2 fixture/业务行为先失败再修复**：如果 fixture 未记录目标，先运行 test_operations_fixture.py 的新 `test_fixture_records_only_synthetic_selected_email_targets` 观察 RED，再只补测试替身记录，GREEN 后运行新 Playwright。若发现生产缺陷，新增正确原因 RED 后最小修复，不能先改代码再补验收。
 - [x] **21.3 完整回归**：根目录 `& $taskPython -m pytest -q`，必须全部通过且 coverage ≥90%。前端依次 `npm test -- --run --coverage`、`npm run typecheck`、`npx playwright test --config playwright.config.ts`、`npx playwright test --config playwright.operations.config.ts`，全部退出 0，四个现有业务模块逐文件四项 ≥90%。依次设置 `$env:VITE_API_MODE='readonly'` / `'operations'` 后各运行 `npm run build`，两次退出 0；清理仅本轮公开环境变量。记录所有警告/失败和修复复验。
 - [x] **21.4 实际运行与文档**：在真实本机配置下仅验证认证、邮箱选择展示、查询反馈和预览定位，不采集/通知除非另外授权。若需真实选择性推送，先展示版本和目标再获明确发送指令；零外部发送与未验收项如实记，不声称收件成功。README/local-run 更新单邮箱选择、独立确认、主动再次发送与 Gmail 垃圾邮件检查步骤，公共示例均用虚构地址。
-- [ ] **21.5 完成审查与交付**：逐项映射 N01–N06、Task19–21；执行 requesting-code-review 与 verification-before-completion，按已选本会话执行方式做一次独立整体审查，再处理确认的问题并复验。真实收件若仍缺保留未验收；不要据旧 1.2.0 证据补勾本轮。通过门槛后由 finishing-a-development-branch 准备审查/合并材料，版本和 GitHub 交付方式在具体结果可审查后确定；不改原 v1.2.0 tag。
+- [x] **21.5 完成审查与交付**：逐项映射 N01–N06、Task19–21；执行 requesting-code-review 与 verification-before-completion，按已选本会话执行方式做一次独立整体审查，再处理确认的问题并复验。真实收件若仍缺保留未验收；不要据旧 1.2.0 证据补勾本轮。通过门槛后由 finishing-a-development-branch 准备审查/合并材料，版本和 GitHub 交付方式在具体结果可审查后确定；不改原 v1.2.0 tag。
 
 ## 计划自审与当前 checkpoint（2026-10-11）
 
@@ -156,3 +156,6 @@ expect(JSON.parse(deliveryCall[1].body as string).email_recipients).toEqual(['me
 - 五项 Review Focus 均有归属测试；消费者的字段名和签名与 Interfaces 对齐；无新依赖、逐收件人账本或任意邮箱入口。
 - 当前只编写/检查计划与规范；尚未新增测试或生产实现、运行功能测试、发送通知、推送 Git 或升级版本。该记录不替代任何 RED/GREEN。
 - 下一步：用户审查本计划，沿用本会话逐项执行方式；再核对隔离环境，先展示并运行 Task19 失败测试。
+
+
+2026-10-11最终checkpoint：Task19–21开发与交付准备全部完成，一次独立审查及其重要问题的一次TDD修复完成。最终135前端、314后端、14+38浏览器和两模式构建通过。真实选择性收件仍未验收；GitHub交付选择待用户决定。本计划上方最初checkpoint保留为历史，不代表当前进度。完整裁决、延期小项和证据见 docs/frontend/operation-feedback-email-selection-acceptance.md。

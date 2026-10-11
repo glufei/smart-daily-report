@@ -76,6 +76,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       unknown: '推送结果未知，请先核实；未自动重发', interrupted: '操作已中断，未自动重试' };
     setMessage(value.kind === 'generation' ? texts[value.status] : deliveryTexts[value.status]);
     if (value.report_revision && value.report_date === selectedDate) {
+      onPreview(null);
       try {
         const preview = await getPreview(selectedDate, token, ticket.signal);
         if (ticket.id === work.current.id && preview.report.report_date === selectedDate) {
@@ -145,12 +146,20 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       const result = pending.current ? await getOperationByKey(pending.current.key, token, ticket.signal)
         : operation ? await getOperation(operation.operation_id, token, ticket.signal) : await getCurrentOperation(token, ticket.signal);
       if (ticket.id !== work.current.id) return;
-      if (result) await show(result, ticket, date);
-      else { setOperation(null); setMessage(''); }
-      if (ticket.id !== work.current.id) return;
+      clearTimeout(work.current.actionTimer);
       const states = { running: '执行中', succeeded: '执行成功', partial_failure: '部分失败', failed: '执行失败', skipped: '已跳过', unknown: '结果待核实', interrupted: '已中断' };
       setActionFeedback({ kind: 'query', pending: false, completedAt: new Date().toISOString(),
         text: result ? `执行结果查询完成。操作：${result.kind === 'generation' ? '生成日报' : '推送日报'} · ${result.report_date} · ${states[result.status]}；服务器更新时间：${new Date(result.updated_at).toLocaleString()}。` : '暂无执行记录' });
+      if (result) {
+        if (result.status !== 'running' && result.report_revision && result.report_date === date) {
+          work.current.actionTimer = setTimeout(() => {
+            if (ticket.id !== work.current.id) return;
+            stop(); setBusy(false); onPreview(null);
+            setMessage('日报预览请求超时，请点击“预览日报”重试。');
+          }, 10000);
+        }
+        await show(result, ticket, date);
+      } else { setOperation(null); setMessage(''); }
     } catch (error) {
       if (ticket.id === work.current.id) {
         setActionFeedback({ kind: 'query', pending: false, failed: true, text: '执行结果查询失败，请查看错误提示。' });

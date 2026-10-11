@@ -759,3 +759,30 @@ test('email_selection_count_explains_exactly_how_many_addresses_will_receive', a
   fireEvent.click(screen.getByRole('checkbox', { name: 'member@example.com' }));
   expect(screen.getByText('已选择 2 位邮件收件人')).toBeVisible();
 });
+
+
+test.each(['timeout', 'failure'])('successful_query_is_not_misreported_by_attached_preview_%s', async outcome => {
+  vi.useFakeTimers(); let previewCalls = 0; let resolveLate!: (value: Response) => void;
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url.endsWith('/current') || url.includes('/operations/')) return Promise.resolve(response(operationFixture('succeeded')));
+    if (++previewCalls === 1) return Promise.resolve(response(previewFixture()));
+    return outcome === 'failure' ? Promise.resolve(response({ error: { code: 'storage_read_failed' } }, 500))
+      : new Promise<Response>(resolve => { resolveLate = resolve; });
+  }); setup(fetchMock); await act(async () => {});
+  fireEvent.click(screen.getByRole('checkbox', { name: 'fixture@example.invalid' }));
+  expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' })); await act(async () => {});
+  expect(screen.getByText(/执行结果查询完成/)).toBeVisible();
+  expect(screen.getByLabelText('本次查询时间')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(screen.queryByText('请求超时，请重新查询执行结果。')).not.toBeInTheDocument();
+  expect(screen.getByText(outcome === 'failure' ? '日报读取失败，请稍后重新查询' : '日报预览请求超时，请点击“预览日报”重试。')).toBeVisible();
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeEnabled();
+  if (outcome === 'timeout') {
+    await act(async () => resolveLate(response(previewFixture())));
+    expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
+  }
+  expect(screen.getByText(/执行结果查询完成/)).toBeVisible();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
