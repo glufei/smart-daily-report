@@ -24,7 +24,7 @@ API 只绑定 `127.0.0.1`，默认端口 8000；允许前端 Origin 为 `http://
 |---|---|---|
 | `report_date` | string | 与请求日期相同的 YYYY-MM-DD，含义是生成时配置时区中的报告日期 |
 | `team_name` | string | 保存时的团队名称 |
-| `generated_at` | string | 带时区的 ISO 8601；页面显示时间及其时区，不依据浏览器时区重新划分记录日期 |
+| `generated_at` | string | 带时区的 ISO 8601；历史查询及操作模式预览均按团队配置时区投影、只读模式按启动参数 `--timezone` 投影（缺省 UTC）；页面显示返回时区及偏移，不依据浏览器时区改变展示。SQLite 中仍保存 UTC 时间点 |
 | `source_status` | object | 三个必填来源键，见下文 |
 | `members` | array of MemberView | 保存的配置顺序，包含零记录成员；不得重新读取当前配置覆盖历史成员 |
 

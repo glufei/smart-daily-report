@@ -8,12 +8,12 @@ from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from ..main import run_report
 from ..shared.models import DailyReport, RunConfig
-from ..shared.calendar import is_workday
 from ..notifier.email import send_email
 from ..notifier.lark_bot import send_lark_message
 from ..shared.errors import ConfigError
@@ -60,6 +60,7 @@ class OperationService:
     def __init__(self, config: RunConfig, store: OperationStore, *,
                  client_factory: Callable[[], httpx.Client] = httpx.Client, smtp_factory=None):
         self.config = config
+        self.display_timezone = ZoneInfo(config.timezone)
         self.store = store
         self.client_factory = client_factory
         self.smtp_factory = smtp_factory
@@ -85,8 +86,6 @@ class OperationService:
         snapshot = None
         def prepare():
             nonlocal snapshot
-            if not is_workday(body.report_date, self.config.holidays):
-                raise OperationError(400, "non_workday")
             enabled = {"email": bool(self.config.smtp.host), "lark": bool(self.config.lark_webhook)}
             if any(not enabled[name] for name in body.channels):
                 raise OperationError(400, "channel_not_configured")
@@ -203,6 +202,9 @@ class OperationService:
             raise OperationError(404, "report_not_found")
         try:
             view = ReportView.model_validate(report)
+            view = view.model_copy(update={
+                "generated_at": view.generated_at.astimezone(self.display_timezone),
+            })
         except (ValueError, TypeError, KeyError, AttributeError):
             raise OperationError(500, "invalid_report_data") from None
         return report, view

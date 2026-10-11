@@ -20,6 +20,7 @@ async function generate(page: Page) {
   await page.getByRole('button', { name: '采集并生成', exact: true }).click();
   await expect(page.getByText('日报生成完成，推送需单独确认', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '联调示例团队' })).toBeVisible();
+  await expect(page.locator('.report-meta')).toContainText(/UTC\+08:00/);
   await expect(page.getByRole('button', { name: '推送日报', exact: true })).toBeDisabled();
 }
 async function selectFixtureRecipient(page: Page) {

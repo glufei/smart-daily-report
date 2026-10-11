@@ -66,10 +66,11 @@ def test_malformed_github_identity_is_source_failure_without_blocking_healthy_fe
     assert result.report.source_status == {"github_commits": "failure", "lark_tasks": "success", "lark_messages": "success"}
 
 
-def test_weekend_skips_before_any_network_or_storage(config, tmp_path):
+def test_weekend_with_no_sources_fails_configuration_instead_of_skipping(config, tmp_path):
     config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite")})
     result = run_report(config, date(2026, 9, 26), dry_run=True)
-    assert result.success and result.skipped
+    assert not result.success and not result.skipped
+    assert result.error_code == "no_sources_configured"
     assert not Path(config.database_path).exists()
 
 

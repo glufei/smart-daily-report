@@ -10,7 +10,8 @@ def test_three_sections_show_records_empty_and_source_failure(records):
     member = MemberReport("u1", "张三", [records["commit"]], [], [records["message"]], {})
     statuses = {"github_commits": "success", "lark_tasks": "success", "lark_messages": "failure"}
     report = generate_daily_report(date(2026, 9, 25), "team", [member], statuses, datetime.now(timezone.utc))
-    assert report.markdown.index("### 代码提交") < report.markdown.index("### 任务进展") < report.markdown.index("### 协作沟通")
+    assert report.markdown.index("### GitHub｜代码提交") < report.markdown.index("#### 提交明细")
+    assert report.markdown.index("### 飞书｜任务与工作消息") < report.markdown.index("#### 任务进展") < report.markdown.index("#### 工作消息")
     assert "fix bug" in report.markdown and "今日无记录" in report.markdown and "数据获取失败" in report.markdown
 
 
@@ -31,7 +32,8 @@ def test_member_summary_counts_records_before_preserving_source_details(records)
     }, datetime.now(timezone.utc))
     expected = ("代码提交：1 条", "已完成任务：1 条", "协作沟通：1 条")
 
-    assert report.markdown.index("### 今日总结") < report.markdown.index("### 代码提交")
+    assert report.markdown.index("### 今日总结") < report.markdown.index("### GitHub｜代码提交") < report.markdown.index("#### 提交明细")
+    assert report.markdown.index("### 飞书｜任务与工作消息") < report.markdown.index("#### 任务进展") < report.markdown.index("#### 工作消息")
     assert all(line in report.markdown for line in expected)
     assert "fix bug" in report.markdown
     assert "Ship（done）" in report.markdown
@@ -75,6 +77,47 @@ def test_member_summary_distinguishes_zero_records_from_failed_source():
     assert "代码提交：0 条" not in html_text
 
 
+def test_report_groups_details_by_platform_and_labels_automated_summary(records):
+    member = MemberReport("u1", "张三", [records["commit"]], [records["task"]], [records["message"]])
+    report = generate_daily_report(date(2026, 9, 25), "team", [member], {
+        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
+    }, datetime.now(timezone.utc))
+
+    markdown = report.markdown
+    assert "系统自动生成" in markdown
+    assert "系统自动统计" in markdown
+    assert "### GitHub｜代码提交" in markdown
+    assert markdown.index("### GitHub｜代码提交") < markdown.index("fix bug")
+    assert "### 飞书｜任务与工作消息" in markdown
+    assert markdown.index("### 飞书｜任务与工作消息") < markdown.index("#### 任务进展") < markdown.index("Ship（done）")
+    assert markdown.index("#### 工作消息") < markdown.index("日报完成")
+
+    from html.parser import HTMLParser
+
+    class Headings(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.tags, self.text = [], []
+            self.in_heading = False
+        def handle_starttag(self, tag, attrs):
+            if tag in {"h1", "h2", "h3", "h4"}:
+                self.tags.append(tag)
+                self.in_heading = True
+        def handle_endtag(self, tag):
+            if tag in {"h1", "h2", "h3", "h4"}:
+                self.in_heading = False
+        def handle_data(self, data):
+            if self.in_heading:
+                self.text.append(data)
+
+    parsed = Headings()
+    parsed.feed(report.html)
+    assert "系统自动生成" in "".join(parsed.text) or "系统自动生成" in report.html
+    assert parsed.text == ["team 日报（2026-09-25）", "张三", "今日总结", "GitHub｜代码提交",
+                           "提交明细", "飞书｜任务与工作消息", "任务进展", "工作消息"]
+    assert parsed.tags == ["h1", "h2", "h3", "h3", "h4", "h3", "h4", "h4"]
+
+
 def test_html_escapes_untrusted_content(records):
     from dataclasses import replace
     member = MemberReport("u1", "<img>", [replace(records["commit"], message="<script>x</script>", url='javascript:alert(1)')])
@@ -108,7 +151,8 @@ def test_markdown_external_text_is_literal_without_extra_links_or_structure(reco
     report = generate_daily_report(date(2026, 9, 25), text, [member], {}, datetime.now(timezone.utc))
     rendered = Parsed()
     rendered.feed(markdown.markdown(report.markdown))
-    assert rendered.tags.count('h1') == 1 and rendered.tags.count('h2') == 1 and rendered.tags.count('h3') == 4
+    assert rendered.tags.count('h1') == 1 and rendered.tags.count('h2') == 1
+    assert rendered.tags.count('h3') == 3 and rendered.tags.count('h4') == 3
     assert rendered.hrefs == ['https://example.test/commit', 'https://example.test/task']
     assert not any(tag in rendered.tags for tag in ['strong', 'em', 'at', 'img'])
     assert ''.join(rendered.text).count(text) == 5

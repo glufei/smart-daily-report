@@ -189,16 +189,27 @@ def test_generation_sources_match_saved_report(config, tmp_path):
     assert get_report(Path(cfg.database_path), date(2026, 9, 25)).source_status["github_commits"] == source_results["github_commits"].status
 
 
-def test_non_workday_has_no_source_calls(config, tmp_path):
+@pytest.mark.parametrize(
+    "report_date,holidays",
+    [
+        (date(2026, 9, 26), set()),
+        (date(2026, 9, 25), {date(2026, 9, 25)}),
+    ],
+    ids=["weekend", "configured-holiday"],
+)
+def test_cli_generates_reports_on_weekends_and_configured_holidays(config, tmp_path, report_date, holidays):
     from dataclasses import replace
+    from pathlib import Path
+    from smart_daily_report.shared.storage import get_report
     requests = []
     database = tmp_path / "reports.sqlite3"
-    cfg = replace(config, github_repositories=["acme/repo"], database_path=str(database))
-    with httpx.Client(transport=httpx.MockTransport(lambda request: (requests.append(request), httpx.Response(403))[1])) as client:
-        result = run_report(cfg, date(2026, 9, 26), dry_run=True, client=client)
-    assert result.skipped and result.success
-    assert getattr(result, "sources", None) == {}
-    assert requests == [] and not database.exists()
+    cfg = replace(config, github_repositories=["acme/repo"], holidays=holidays, database_path=str(database))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: (requests.append(request), httpx.Response(200, json=[]))[1])) as client:
+        result = run_report(cfg, report_date, dry_run=True, client=client)
+    assert result.success and not result.skipped
+    assert result.sources["github_commits"].status == "success"
+    assert len(requests) == 1 and requests[0].method == "GET"
+    assert get_report(Path(database), report_date) is not None
 
 
 def test_failed_sources_are_available_without_creating_report(config, tmp_path):

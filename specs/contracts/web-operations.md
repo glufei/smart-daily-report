@@ -38,7 +38,7 @@
 }
 ```
 
-`channels` 为非空、不重复数组，仅 email/lark；规范化时按固定 email/lark 顺序。浏览器不得传收件地址、Webhook、上游 Token、消息正文、数据库路径、采集 URL、配置路径、强制重发或忽略工作日选项。
+`channels` 为非空、不重复数组，仅 email/lark；规范化时按固定 email/lark 顺序。浏览器不得传收件地址、Webhook、上游 Token、消息正文、数据库路径、采集 URL、配置路径或强制重发选项。任意有效日期均可生成和推送，无需日期例外标志。
 
 ## 3. DTO 与状态
 
@@ -61,7 +61,7 @@ SourceOutcome：`{"status":"pending|success|failure|disabled","error_code":null�
 
 DeliveryOutcome：`{"status":"not_requested|pending|accepted|rejected|partial_failure|unknown","attempts":非负整数,"error_code":null或固定错误码}`。not_requested 的 attempts 为 0；pending 仅用于选定但尚无终态的渠道。partial_failure 表示 SMTP 已接受部分收件人、拒绝其他收件人，不可整渠道重发。unknown 表示缺少可证明受理/拒绝的结果，不能显示“失败，可放心重发”。
 
-生成只要至少一个已启用来源成功且持久化成功，就为 succeeded 或 partial_failure（另一个已启用来源失败）；所有已启用来源失败为 failed/all_sources_failed，无日报版本。非工作日为 skipped/non_workday，无源平台调用、写历史或通知。配置无来源或必需凭证缺失在启动时失败。
+生成只要至少一个已启用来源成功且持久化成功，就为 succeeded 或 partial_failure（另一个已启用来源失败）；所有已启用来源失败为 failed/all_sources_failed，无日报版本。任意有效日期（包括周末和 `team.holidays` 配置中的日期）均执行相同采集流程，不新建 `skipped/non_workday` 结果。配置无来源或必需凭证缺失在启动时失败。
 
 推送所有选定渠道 accepted 才为 succeeded；任一 unknown 为 unknown（其他渠道保留各自结果）；有 accepted/partial_failure 且另有拒绝或同渠道部分拒绝为 partial_failure；全部明确拒绝为 failed。未选渠道 not_requested，不把其未调用当失败。启动恢复的未完成项为 interrupted；生成不自动恢复，推送 pending 渠道保守记 unknown，不重放。
 
@@ -85,7 +85,7 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 ## 4. 排他、幂等和发送时机
 
 1. 先验证 Origin/鉴权/输入，再在 SQLite 事务中查同键。规范化请求指纹包含 kind、日期，以及推送的版本/排序渠道；不包含 Token。已存在同键同指纹返回原记录；同键不同指纹为 409，不改变原状态。
-2. 无同键时，若有任意活动操作返回 409 operation_busy；不排队，不取消前一次操作。检查推送日报是否存在/有效/工作日、版本和渠道是否匹配，防止页面确认后内容改变。
+2. 无同键时，若有任意活动操作返回 409 operation_busy；不排队，不取消前一次操作。检查推送日报是否存在/有效、版本和渠道是否匹配，防止页面确认后内容改变；不检查星期或节假日。
 3. 推送前检查每个选定渠道在同日报版本的既有记录；accepted/partial_failure/unknown 或中断后的 unknown 禁止重发，返回 409 delivery_not_repeatable。明确 rejected 可在用户查看结果后用新键单独选择该渠道重提；不能附带重发成功渠道。
 4. 将运行记录与活动槽原子持久化，再返回 202 并执行后台函数。后台推送使用已校验并捕获的 DailyReport 快照，调用前持久化选定渠道为 pending；无论异常均写安全终态并释放活动槽。渠道结果必须在开始另一渠道前落盘，进程在发送后写结果前崩溃则恢复为 unknown。
 5. POST 响应丢失不表示操作未执行。前端保留该次 request_id，先 by-key 查询；未确认前不产生另一键重交。by-key 404 只表示尚无接受记录，前端可由用户显式重试**同键同内容**，禁止自动重发。刷新后可重新读取预览的渠道记录，服务端重复检查仍生效。
@@ -101,7 +101,6 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 | 400 / invalid_request | 操作参数无效 |
 | 400 / invalid_report_date | 日期无效，请使用 YYYY-MM-DD |
 | 400 / channel_not_configured | 所选推送渠道未配置 |
-| 400 / non_workday | 该日期为非工作日，不能推送 |
 | 401 / operation_unauthorized | 操作令牌无效或未提供 |
 | 403 / origin_not_allowed | 请求来源未允许 |
 | 404 / report_not_found | 该日期尚无日报 |
@@ -115,7 +114,7 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 | 500 / operation_storage_failed | 操作记录不可用，未接受新操作 |
 | 500 / internal_error | 操作请求处理失败 |
 
-即时 500 或响应丢失可能发生在持久接受之后，页面一律查询原 request_id，不据此自动重交。后台错误码为 non_workday/all_sources_failed/source_auth_failed/source_unavailable/source_payload_invalid/report_write_failed/delivery_rejected/delivery_partial/delivery_unknown/operation_interrupted/internal_error；映射由确定性代码维护，禁用上游错误正文透传。
+即时 500 或响应丢失可能发生在持久接受之后，页面一律查询原 request_id，不据此自动重交。新操作的错误码为 all_sources_failed/source_auth_failed/source_unavailable/source_payload_invalid/report_write_failed/delivery_rejected/delivery_partial/delivery_unknown/operation_interrupted/internal_error；旧持久化操作中的 `non_workday`/`skipped` 仅为历史兼容，不会由当前实现新建。映射由确定性代码维护，禁用上游错误正文透传。
 
 ## 6. 上游真实性与验证边界
 
@@ -182,7 +181,7 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 2. 每次新邮件请求均由用户选择目标、点击推送并确认。已接受操作 pending、原请求尚未确认或已有活动槽时，新提交仍禁用/拒绝；不能用新键恢复丢失响应。
 3. 同键同规范化 kind/日期/版本/渠道/邮箱选择只执行一次；同键改变任一字段 409 idempotency_conflict。网络断线、超时、500/响应不可解析时继续查询原键，不自动 POST；明确由用户重试原请求仍用同键同内容。
 4. 飞书仍按同版本渠道历史 accepted/partial_failure/unknown/pending 阻断。邮件与不可重发飞书的组合请求整体 409 delivery_not_repeatable、零发送；取消飞书后可以提交仅邮件的新请求。
-5. 版本匹配、工作日规则、原子活动槽、重启中断/未知恢复及无自动续跑保持。当前操作新请求不修改历史渠道终态，服务商受理与实际收件依旧分开。
+5. 版本匹配、任意日期处理、原子活动槽、重启中断/未知恢复及无自动续跑保持。当前操作新请求不修改历史渠道终态，服务商受理与实际收件依旧分开。
 
 ### 7.5 查询/预览的页面反馈契约
 

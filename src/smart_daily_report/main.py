@@ -15,7 +15,6 @@ from .collector.lark import TokenProvider, collect_messages, collect_tasks
 from .generator.formatter import generate_daily_report
 from .notifier.email import send_email
 from .notifier.lark_bot import send_lark_message
-from .shared.calendar import is_workday
 from .shared.config import load_config
 from .shared.health import check_dependencies
 from .shared.identity import filter_sensitive_messages, map_records_to_members, resolve_github_member
@@ -33,9 +32,6 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
     start = time.monotonic()
     try:
         logger.info("run_started", extra={"run_id": run_id})
-        if not is_workday(report_date, config.holidays):
-            logger.info("skipped_non_workday", extra={"run_id": run_id, "status": "skipped"})
-            return RunResult(True, skipped=True)
         enabled = {"github_commits": bool(config.github_repositories),
                    "lark_tasks": bool(config.lark_project_ids), "lark_messages": bool(config.lark_chat_ids)}
         if not any(enabled.values()):

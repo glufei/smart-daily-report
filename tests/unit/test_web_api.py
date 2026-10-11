@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 import sqlite3
 import subprocess
 import sys
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
@@ -32,6 +33,17 @@ def client(database):
     return TestClient(create_app(database), base_url="http://127.0.0.1")
 
 
+def test_public_package_and_api_version_match_installed_release():
+    import tomllib
+
+    import smart_daily_report
+
+    project_version = tomllib.loads((Path(__file__).resolve().parents[2] / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    assert smart_daily_report.__version__ == project_version
+    schema = TestClient(create_app(Path("unused.sqlite3")), base_url="http://127.0.0.1").get("/openapi.json").json()
+    assert schema["info"]["version"] == project_version
+
+
 def test_query_preserves_content_order_and_only_exposes_contract_fields(history):
     database, report = history
     response = client(database).get("/api/v1/reports/2026-09-25")
@@ -50,6 +62,18 @@ def test_query_preserves_content_order_and_only_exposes_contract_fields(history)
         "record_id", "repository", "message", "committed_at", "url", "additions", "deletions", "files_changed"}
     for marker in ("private-login-marker", "private-markdown-marker", "private-html-marker", "ou_1", "author_login"):
         assert marker not in response.text
+
+
+def test_configured_team_timezone_is_projected_without_rewriting_utc_history(history):
+    from types import SimpleNamespace
+
+    database, report = history
+    app = create_app(database, operations=SimpleNamespace(config=SimpleNamespace(timezone="Asia/Shanghai")),
+                     display_timezone="Asia/Shanghai")
+    body = TestClient(app, base_url="http://127.0.0.1").get("/api/v1/reports/2026-09-25").json()
+
+    assert body["generated_at"] == "2026-09-25T18:00:00+08:00"
+    assert get_report(database, report.report_date).generated_at.isoformat() == "2026-09-25T10:00:00+00:00"
 
 
 def test_empty_report_and_partial_source_failure_are_both_valid_history(history):
@@ -243,6 +267,37 @@ def test_web_entry_only_binds_loopback_without_loading_push_configuration(tmp_pa
     assert calls == [{"host": "127.0.0.1", "port": 8000, "access_log": False}]
     with pytest.raises(SystemExit):
         main(["--database", "reports.sqlite3", "--port", "0"])
+
+
+def test_readonly_entry_passes_explicit_timezone_to_history_api(tmp_path, monkeypatch):
+    from smart_daily_report.web import main as entry
+
+    captured = []
+    monkeypatch.setattr(entry, "create_app", lambda database, **kwargs: captured.append(kwargs) or object())
+    monkeypatch.setattr(entry.uvicorn, "run", lambda app, **kwargs: None)
+
+    assert entry.main(["--database", str(tmp_path / "reports.sqlite3"), "--timezone", "Asia/Shanghai"]) == 0
+    assert captured == [{"display_timezone": "Asia/Shanghai"}]
+
+
+def test_operation_entry_uses_configured_team_timezone(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from smart_daily_report.web import main as entry
+
+    config = SimpleNamespace(timezone="Asia/Shanghai", database_path=str(tmp_path / "reports.sqlite3"))
+    captured = []
+    monkeypatch.setattr(entry, "load_config", lambda path: config)
+    monkeypatch.setattr(entry, "validate_operation_config", lambda config, token: None)
+    monkeypatch.setattr(entry, "OperationService", lambda config, store: object())
+    monkeypatch.setattr(entry, "OperationStore", lambda path: object())
+    monkeypatch.setattr(entry, "create_app", lambda database, **kwargs: captured.append(kwargs) or object())
+    monkeypatch.setattr(entry.uvicorn, "run", lambda app, **kwargs: None)
+    monkeypatch.setenv("DAILY_REPORT_WEB_TOKEN", "t" * 32)
+
+    assert entry.main(["--config", str(tmp_path / "config.yaml")]) == 0
+    assert len(captured) == 1
+    assert captured[0]["operation_token"] == "t" * 32
+    assert captured[0]["display_timezone"] == "Asia/Shanghai"
 
 
 def test_existing_cli_does_not_import_optional_web_framework():

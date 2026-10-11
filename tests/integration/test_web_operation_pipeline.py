@@ -99,17 +99,23 @@ def test_failed_source_result_projects_safe_error_without_report(config,tmp_path
     assert result['report_revision'] is None and not (tmp_path/'reports.sqlite3').exists()
 
 
-def test_non_workday_generation_skips_without_upstream(config,tmp_path):
+@pytest.mark.parametrize(
+    "report_date,holidays",
+    [(date(2026,9,26),set()),(date(2026,9,25),{date(2026,9,25)})],
+    ids=["weekend","configured-holiday"],
+)
+def test_web_generation_collects_on_weekends_and_configured_holidays(config,tmp_path,report_date,holidays):
     requests=[]
-    service,store,cfg=make_service(config,tmp_path,lambda request:(requests.append(request),httpx.Response(403))[1])
+    config=replace(config,holidays=holidays)
+    service,store,cfg=make_service(config,tmp_path,lambda request:(requests.append(request),httpx.Response(200,json=[]))[1])
     execute=getattr(service,'execute',None)
     assert execute is not None
-    accepted=service.accept_generation(GenerationRequest(report_date=date(2026,9,26)),str(uuid4()))
+    accepted=service.accept_generation(GenerationRequest(report_date=report_date),str(uuid4()))
     execute(accepted.view.operation_id)
     result=store.get(accepted.view.operation_id)
-    assert result['status']=='skipped' and result['error_code']=='non_workday'
-    assert result['report_revision'] is None and requests==[]
-    assert not (tmp_path/'reports.sqlite3').exists()
+    assert result['status']=='succeeded' and result['error_code'] is None
+    assert result['report_revision'] and len(requests)==1 and requests[0].method=='GET'
+    assert (tmp_path/'reports.sqlite3').exists()
 
 
 def test_one_source_failure_keeps_other_sources(config,tmp_path):
@@ -159,8 +165,11 @@ def test_preview_does_not_attribute_current_config_to_old_history(config,tmp_pat
     assert result.targets.email.previous is None and result.targets.lark.previous is None
     assert result.targets.email.enabled and result.targets.lark.enabled
     assert result.report.report_date==date(2026,9,25)
+    assert result.report.generated_at.isoformat()=='2026-09-25T08:00:00+08:00'
     assert 'private-marker' not in result.model_dump_json()
     assert Path(cfg.database_path).read_bytes()==before
+    from smart_daily_report.shared.storage import get_report
+    assert get_report(Path(cfg.database_path),date(2026,9,25)).generated_at.isoformat()=='2026-09-25T00:00:00+00:00'
 
 
 def test_generated_preview_has_exact_report_and_source_evidence(config,tmp_path):
@@ -503,16 +512,35 @@ def test_failure_to_persist_post_send_result_never_automatically_resends(config,
     assert len(sends)==1
 
 
-def test_non_workday_and_disabled_channel_are_rejected_before_call(config,tmp_path):
+@pytest.mark.parametrize(
+    "report_date",
+    [date(2026,9,26),date(2026,9,25)],
+    ids=["weekend","configured-holiday"],
+)
+def test_delivery_is_allowed_every_day_and_disabled_channel_remains_rejected(config,tmp_path,report_date):
     from smart_daily_report.web.operations import OperationError
     from smart_daily_report.web.operation_schemas import DeliveryRequest
+    from pathlib import Path
+    from datetime import datetime,timezone
+    from smart_daily_report.generator.formatter import generate_daily_report
+    from smart_daily_report.shared.models import MemberReport
+    from smart_daily_report.shared.storage import write_report
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
+    service.config=replace(service.config,holidays={date(2026,9,25),date(2026,9,26)})
+    report=generate_daily_report(report_date,'team',[MemberReport('u1','Member')],
+      {'github_commits':'success','lark_tasks':'success','lark_messages':'success'},datetime.now(timezone.utc))
+    write_report(Path(cfg.database_path),report)
+    preview=service.preview(report_date)
     accept=getattr(service,'accept_delivery',None); assert accept is not None
-    with pytest.raises(OperationError,match='non_workday'):
-        accept(DeliveryRequest(report_date=date(2026,9,26),report_revision=preview.report_revision,channels=['email'],email_recipients=['lead@test']),str(uuid4()))
+    accepted=accept(DeliveryRequest(report_date=report_date,report_revision=preview.report_revision,channels=['email'],email_recipients=['lead@test']),str(uuid4()))
+    assert accepted.view.status=='running' and accepted.snapshot.report_date==report_date
+    service.execute(accepted.view.operation_id,accepted.snapshot)
+    assert store.get(accepted.view.operation_id)['deliveries']['email']['status']=='accepted'
+    assert len(sends)==1
     service.config=replace(service.config,lark_webhook=None)
-    with pytest.raises(OperationError,match='channel_not_configured'): accept_delivery(service,preview,channels=['lark'])
-    assert requests==[] and sends==[]
+    with pytest.raises(OperationError,match='channel_not_configured'):
+        accept(DeliveryRequest(report_date=report_date,report_revision=preview.report_revision,channels=['lark'],email_recipients=[]),str(uuid4()))
+    assert len(sends)==1
 
 
 def test_rejected_channel_can_be_retried_alone_without_resending_accepted_channel(config,tmp_path):

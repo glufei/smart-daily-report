@@ -20,19 +20,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     mode.add_argument("--database", type=Path, help="既有日报 SQLite 文件（只读）")
     mode.add_argument("--config", type=Path, help="日报配置（生成与推送）")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--timezone", help="只读查询的生成时间展示时区（IANA 名称，默认 UTC）")
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error("port must be between 1 and 65535")
     configure_logging()
     if args.config is not None:
+        if args.timezone is not None:
+            parser.error("--timezone 仅适用于 --database；操作模式使用配置中的 team.timezone")
         config = load_config(args.config)
         token = os.environ.get("DAILY_REPORT_WEB_TOKEN", "")
         validate_operation_config(config, token)
         database = Path(config.database_path)
         service = OperationService(config, OperationStore(database.with_name(database.name + ".operations.sqlite3")))
-        app = create_app(database, operations=service, operation_token=token)
+        app = create_app(database, operations=service, operation_token=token,
+                         display_timezone=config.timezone)
     else:
-        app = create_app(args.database)
+        app = create_app(args.database, display_timezone=args.timezone or "UTC")
     uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
     return 0
 

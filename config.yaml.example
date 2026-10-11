@@ -1,7 +1,7 @@
 team:
   name: example-team
   timezone: Asia/Shanghai
-  holidays: []
+  holidays: [] # 兼容旧配置；周末及此列表日期仍可生成和推送
   database_path: data/reports.sqlite3
   github_api_base_url: https://api.github.com
   lark_api_base_url: https://open.feishu.cn/open-apis
