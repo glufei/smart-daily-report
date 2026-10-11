@@ -6,29 +6,31 @@ import type { OperationView, PreviewView } from './operations';
 type Channel = 'email' | 'lark';
 type PendingRequest = { kind: 'generation'; key: string; date: string } | { kind: 'delivery'; key: string; date: string; revision: string; channels: Channel[] };
 type Confirmation = { date: string; revision: string; channels: Channel[]; targets: string[] };
-type Props = { date: string; onPreview: (value: PreviewView | null) => void; preview: PreviewView | null };
+type Props = { date: string; onPreview: (value: PreviewView | null, focus?: boolean) => void; preview: PreviewView | null };
+type ActionFeedback = { kind: 'query' | 'preview'; pending: boolean; text: string; completedAt?: string; failed?: boolean };
 export function OperationPanel({ date, onPreview, preview }: Props) {
   const [token, setToken] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [operation, setOperation] = useState<OperationView | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const [canRetry, setCanRetry] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const tokenInput = useRef<HTMLInputElement>(null);
-  const work = useRef<{ id: number; controller?: AbortController; timer?: ReturnType<typeof setTimeout>; deadline?: ReturnType<typeof setTimeout> }>({ id: 0 });
+  const work = useRef<{ id: number; controller?: AbortController; timer?: ReturnType<typeof setTimeout>; deadline?: ReturnType<typeof setTimeout>; actionTimer?: ReturnType<typeof setTimeout> }>({ id: 0 });
   const locked = useRef(false);
   const pending = useRef<PendingRequest | null>(null);
   function stop() {
-    work.current.id++; work.current.controller?.abort(); clearTimeout(work.current.timer); clearTimeout(work.current.deadline);
+    work.current.id++; work.current.controller?.abort(); clearTimeout(work.current.timer); clearTimeout(work.current.deadline); clearTimeout(work.current.actionTimer);
   }
   function begin() {
-    stop(); const controller = new AbortController(); work.current.controller = controller;
+    stop(); setActionFeedback(null); const controller = new AbortController(); work.current.controller = controller;
     return { id: work.current.id, signal: controller.signal };
   }
-  useEffect(() => { stop(); setBusy(false); onPreview(null); }, [date, onPreview]);
+  useEffect(() => { stop(); setBusy(false); setActionFeedback(null); onPreview(null); }, [date, onPreview]);
   useEffect(() => () => stop(), []);
   function blocked(channel: Channel) {
     return !preview?.targets[channel].enabled || ['accepted', 'partial_failure', 'unknown', 'pending'].includes(preview.targets[channel].previous?.status || '');
@@ -40,7 +42,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
   useEffect(() => { if (confirmation) dialog.current?.showModal(); }, [confirmation]);
   function failure(error: unknown) {
     if (error instanceof OperationError && error.code === 'operation_unauthorized') {
-      setToken(''); setAuthenticated(false); setBusy(false); setConfirmation(null); onPreview(null); stop();
+      setToken(''); setAuthenticated(false); setBusy(false); setActionFeedback(null); setConfirmation(null); onPreview(null); stop();
     }
     setMessage(error instanceof OperationError ? error.message : '操作请求处理失败');
   }
@@ -127,22 +129,47 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       }
     } finally { locked.current = false; if (ticket.id === work.current.id) setBusy(false); }
   }
+  function startAction(kind: 'query' | 'preview', ticket: ReturnType<typeof begin>) {
+    setMessage('');
+    setActionFeedback({ kind, pending: true, text: kind === 'query' ? '正在查询执行结果…' : '正在加载日报预览…' });
+    work.current.actionTimer = setTimeout(() => {
+      if (ticket.id !== work.current.id) return;
+      stop(); setBusy(false);
+      setActionFeedback({ kind, pending: false, failed: true, text: `请求超时，请重新${kind === 'query' ? '查询执行结果' : '预览日报'}。` });
+    }, 10000);
+  }
   async function queryResult() {
-    const ticket = begin(); setBusy(true); setCanRetry(false);
+    const ticket = begin(); setBusy(true); setCanRetry(false); startAction('query', ticket);
     try {
       const result = pending.current ? await getOperationByKey(pending.current.key, token, ticket.signal)
         : operation ? await getOperation(operation.operation_id, token, ticket.signal) : await getCurrentOperation(token, ticket.signal);
-      await show(result, ticket, date);
-    } catch (error) { if (ticket.id === work.current.id) { failure(error); setCanRetry(!!pending.current && error instanceof OperationError && error.code === 'operation_not_found'); } }
-    finally { if (ticket.id === work.current.id) setBusy(false); }
+      if (ticket.id !== work.current.id) return;
+      if (result) await show(result, ticket, date);
+      else { setOperation(null); setMessage(''); }
+      if (ticket.id !== work.current.id) return;
+      const states = { running: '执行中', succeeded: '执行成功', partial_failure: '部分失败', failed: '执行失败', skipped: '已跳过', unknown: '结果待核实', interrupted: '已中断' };
+      setActionFeedback({ kind: 'query', pending: false, completedAt: new Date().toISOString(),
+        text: result ? `执行结果查询完成。操作：${result.kind === 'generation' ? '生成日报' : '推送日报'} · ${result.report_date} · ${states[result.status]}；服务器更新时间：${new Date(result.updated_at).toLocaleString()}。` : '暂无执行记录' });
+    } catch (error) {
+      if (ticket.id === work.current.id) {
+        setActionFeedback({ kind: 'query', pending: false, failed: true, text: '执行结果查询失败，请查看错误提示。' });
+        failure(error); setCanRetry(!!pending.current && error instanceof OperationError && error.code === 'operation_not_found');
+      }
+    } finally { if (ticket.id === work.current.id) { clearTimeout(work.current.actionTimer); setBusy(false); } }
   }
   async function previewReport() {
-    const ticket = begin(); setBusy(true); onPreview(null);
+    const ticket = begin(); setBusy(true); onPreview(null); startAction('preview', ticket);
     try {
       const value = await getPreview(date, token, ticket.signal);
-      if (ticket.id === work.current.id) onPreview(value);
-    } catch (error) { if (ticket.id === work.current.id) failure(error); }
-    finally { if (ticket.id === work.current.id) setBusy(false); }
+      if (ticket.id === work.current.id) {
+        onPreview(value, true);
+        setActionFeedback({ kind: 'preview', pending: false, text: `已加载 ${value.report.report_date} 日报预览，请核对下方正文。` });
+      }
+    } catch (error) {
+      if (ticket.id === work.current.id) {
+        setActionFeedback({ kind: 'preview', pending: false, failed: true, text: '日报预览失败，请查看错误提示。' }); failure(error);
+      }
+    } finally { if (ticket.id === work.current.id) { clearTimeout(work.current.actionTimer); setBusy(false); } }
   }
   function confirmDelivery() {
     if (!confirmation || !preview || confirmation.date !== date || confirmation.revision !== preview.report_revision || !authenticated || locked.current) return;
@@ -155,15 +182,19 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     <label htmlFor="operation-token">操作令牌</label>
     <input ref={tokenInput} id="operation-token" className="input" type="password" autoComplete="off" value={token}
       aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
-      onChange={event => { stop(); setToken(event.target.value); setAuthenticated(false); setBusy(false); setConfirmation(null); if (message === '请输入操作令牌') setMessage(''); }} />
+      onChange={event => { stop(); setToken(event.target.value); setAuthenticated(false); setBusy(false); setActionFeedback(null); setConfirmation(null); onPreview(null); if (message === '请输入操作令牌') setMessage(''); }} />
     <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void authenticate()}>验证令牌</button>
     <button type="button" className="btn btn-primary" disabled={!authenticated || !validDate(date) || busy || operation?.status === 'running' || !!pending.current}
       aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
       onClick={() => void generate()}>采集并生成</button>
     {!authenticated && <p id="operation-token-hint" className="query-hint">请先输入并验证操作令牌，验证成功后才能采集并生成。</p>}
-    {authenticated && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void queryResult()}>查询执行结果</button>}
+    {authenticated && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void queryResult()}>{actionFeedback?.kind === 'query' && actionFeedback.pending ? '正在查询执行结果…' : '查询执行结果'}</button>}
     {authenticated && canRetry && pending.current && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void submitRequest(pending.current!)}>重试原请求</button>}
-    {authenticated && <button type="button" className="btn btn-accent-outline" disabled={!validDate(date) || busy || operation?.status === 'running'} onClick={() => void previewReport()}>预览日报</button>}
+    {authenticated && <button type="button" className="btn btn-accent-outline" disabled={!validDate(date) || busy || operation?.status === 'running'} onClick={() => void previewReport()}>{actionFeedback?.kind === 'preview' && actionFeedback.pending ? '正在加载日报预览…' : '预览日报'}</button>}
+    {actionFeedback && <div className="operation-feedback" role={actionFeedback.failed ? 'alert' : 'status'} aria-busy={actionFeedback.pending}>
+      <p>{actionFeedback.text}</p>
+      {actionFeedback.completedAt && <p>本次查询时间：<time aria-label="本次查询时间" dateTime={actionFeedback.completedAt}>{new Date(actionFeedback.completedAt).toLocaleString()}（{Intl.DateTimeFormat().resolvedOptions().timeZone}）</time></p>}
+    </div>}
     {authenticated && preview && <div className="delivery-options">
       <p>预览版本：<code>{preview.report_revision}</code></p>
       {(['email', 'lark'] as Channel[]).map(channel => <div key={channel}>

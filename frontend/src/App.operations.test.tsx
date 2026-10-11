@@ -514,3 +514,109 @@ test('unauthenticated_generation_explains_disabled_action_without_request', () =
   expect(button).toHaveAccessibleDescription(/请先输入并验证操作令牌/);
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+
+test('query_feedback_loading_then_completed_even_when_result_is_unchanged', async () => {
+  let resolve!: (value: Response) => void;
+  const fetchMock = vi.fn().mockImplementation((url: string) => url.endsWith('/current') ? Promise.resolve(response(operationFixture('succeeded')))
+    : url.includes('/preview') ? Promise.resolve(response(previewFixture())) : new Promise<Response>(done => { resolve = done; }));
+  setup(fetchMock); await screen.findByRole('heading', { name: '示例研发团队' });
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T02:00:00Z'));
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  expect(screen.getByRole('button', { name: '正在查询执行结果…' })).toBeDisabled();
+  await act(async () => resolve(response(operationFixture('succeeded'))));
+  expect(screen.getByText(/执行结果查询完成/)).toBeVisible();
+  const firstTime = screen.getByLabelText('本次查询时间').getAttribute('datetime');
+  vi.setSystemTime(new Date('2026-10-11T02:01:00Z'));
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await act(async () => resolve(response(operationFixture('succeeded'))));
+  expect(screen.getByLabelText('本次查询时间').getAttribute('datetime')).not.toBe(firstTime);
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test('query_feedback_null_reports_empty_without_authentication_message', async () => {
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response(null))); setup(fetchMock);
+  await screen.findByText('令牌已验证');
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await screen.findByText('暂无执行记录');
+  expect(screen.queryByText('令牌已验证')).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: '推送执行结果' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test('preview_feedback_success_focuses_current_report_heading', async () => {
+  let resolve!: (value: Response) => void;
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(done => { resolve = done; }));
+  setup(fetchMock); await screen.findByText('令牌已验证');
+  fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  await act(async () => resolve(response(previewFixture())));
+  expect(screen.getByRole('heading', { name: '示例研发团队' })).toHaveFocus();
+  expect(screen.getByText(/已加载 2026-09-25 日报预览/)).toBeVisible();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test.each(['查询执行结果', '预览日报'])('manual_query_and_preview_timeout_after_ten_seconds: %s', async action => {
+  let resolve!: (value: Response) => void;
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(done => { resolve = done; }));
+  setup(fetchMock); await screen.findByText('令牌已验证'); vi.useFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: action }));
+  await act(async () => vi.advanceTimersByTimeAsync(9999));
+  expect(screen.queryByText(/请求超时/)).not.toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  expect(screen.getByText(/请求超时/)).toBeVisible();
+  expect(screen.getByRole('button', { name: action })).toBeEnabled();
+  await act(async () => resolve(response(action === '预览日报' ? previewFixture() : null)));
+  expect(screen.getByText(/请求超时/)).toBeVisible();
+  expect(screen.queryByRole('heading', { name: '示例研发团队' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test.each(['报告日期', '操作令牌'])('late_preview_after_date_or_token_change_does_not_focus: %s', async field => {
+  let resolve!: (value: Response) => void;
+  setup(vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(done => { resolve = done; })));
+  await screen.findByText('令牌已验证'); fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  const input = screen.getByLabelText(field); input.focus();
+  fireEvent.change(input, { target: { value: field === '报告日期' ? '2026-09-24' : 'new-private-token' } });
+  await act(async () => resolve(response(previewFixture())));
+  expect(input).toHaveFocus();
+  expect(screen.queryByRole('heading', { name: '示例研发团队' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/已加载 2026-09-25 日报预览/)).not.toBeInTheDocument();
+});
+
+test('automatic_preview_does_not_move_focus', async () => {
+  let resolve!: (value: Response) => void;
+  setup(vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockImplementation(() => new Promise<Response>(done => { resolve = done; })));
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
+  const input = screen.getByLabelText('操作令牌'); input.focus();
+  await act(async () => resolve(response(previewFixture())));
+  expect(input).toHaveFocus();
+});
+
+test.each([
+  ['missing', 404, { error: { code: 'report_not_found' } }, '该日期尚无日报'],
+  ['unauthorized', 401, { error: { code: 'operation_unauthorized' } }, '操作令牌无效或未提供'],
+  ['network', 0, null, '无法连接日报服务'],
+] as const)('preview_feedback_failure_is_explicit_and_cannot_send: %s', async (_kind, status, body, message) => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(null));
+  if (status) fetchMock.mockResolvedValue(response(body, status)); else fetchMock.mockRejectedValue(new TypeError('synthetic network loss'));
+  setup(fetchMock); await screen.findByText('令牌已验证'); fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  await screen.findByText(message);
+  expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+
+test('preview_feedback_loading_before_response', async () => {
+  setup(vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(() => {})));
+  await screen.findByText('令牌已验证'); fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  expect(screen.getByRole('button', { name: '正在加载日报预览…' })).toBeDisabled();
+});
+
+test('query_feedback_completion_describes_the_execution_date', async () => {
+  const value = { ...operationFixture('succeeded'), report_date: '2026-09-24' };
+  setup(vi.fn().mockImplementation(() => Promise.resolve(response(value)))); await screen.findByText('正在查看 2026-09-24 的操作结果');
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await screen.findByText(/执行结果查询完成/);
+  expect(screen.getByLabelText('本次查询时间')).toBeVisible();
+  expect(screen.getByText(/操作：生成日报 · 2026-09-24/)).toBeVisible();
+});

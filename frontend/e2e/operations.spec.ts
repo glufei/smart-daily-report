@@ -181,3 +181,33 @@ test('empty_token_feedback_and_disabled_generation_are_clear', async ({ page }, 
   expect(apiRequests).toBe(0);
   await screenshot(page, info.project.name, 'token-required');
 });
+
+
+test('manual_preview_focus_and_feedback', async ({ page }) => {
+  await authenticate(page); await generate(page); await page.emulateMedia({ reducedMotion: 'reduce' });
+  const before = await counts(); const methods: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/v1/')) methods.push(request.method()); });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: '预览日报', exact: true }).click();
+  await expect(page.getByText(/已加载 2026-09-25 日报预览/)).toBeVisible();
+  const heading = page.getByRole('heading', { name: '联调示例团队' });
+  await expect(heading).toBeFocused(); await expect(heading).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(methods.length).toBeGreaterThan(0); expect(methods.every(method => method === 'GET')).toBe(true);
+  expect(await counts()).toEqual(before);
+});
+
+test('query_feedback_and_readonly_requests', async ({ page }) => {
+  await authenticate(page); await generate(page); const before = await counts(); const methods: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/v1/')) methods.push(request.method()); });
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/operations/*', async route => { await gate; await route.continue(); });
+  await page.getByRole('button', { name: '查询执行结果', exact: true }).click();
+  await expect(page.getByRole('button', { name: '正在查询执行结果…', exact: true })).toBeDisabled(); release();
+  await expect(page.getByText(/执行结果查询完成/)).toBeVisible();
+  const first = await page.getByLabel('本次查询时间', { exact: true }).getAttribute('datetime');
+  await page.getByRole('button', { name: '查询执行结果', exact: true }).click();
+  await expect(page.getByLabel('本次查询时间', { exact: true })).not.toHaveAttribute('datetime', first!);
+  expect(methods.length).toBeGreaterThan(0); expect(methods.every(method => method === 'GET')).toBe(true);
+  expect(await counts()).toEqual(before);
+});

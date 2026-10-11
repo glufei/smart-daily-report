@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19.3.0、TypeScript、Vite、Zod 4.6.5；Python ≥3.11、FastAPI 0.142.2、SQLite/标准库 SMTP；pytest、Vitest、React Testing Library、Playwright。
 
-**Spec:** [proposal §8/N01–N06](../../../specs/proposal.md)、[design §1.6](../../../specs/design.md)、[ADR-006](../../../specs/adrs/006-operation-feedback-email-selection.md)、[web-operations §7](../../../specs/contracts/web-operations.md)、[Task19–21](../../../specs/tasks.md)。书面规范已获用户 2026-10-11“开始工作”确认；本计划待审，业务实现未开始。
+**Spec:** [proposal §8/N01–N06](../../../specs/proposal.md)、[design §1.6](../../../specs/design.md)、[ADR-006](../../../specs/adrs/006-operation-feedback-email-selection.md)、[web-operations §7](../../../specs/contracts/web-operations.md)、[Task19–21](../../../specs/tasks.md)。书面规范已获用户 2026-10-11“开始工作”确认；本计划已获用户确认；当前执行进度见任务勾选和本轮 TDD 记录。
 
 ## Global Constraints
 
@@ -63,7 +63,7 @@ $env:DAILY_REPORT_PYTHON = $taskPython
 
 **Interfaces:** Consumes 现有 getCurrentOperation/getOperation/getOperationByKey/getPreview(date, token, signal)。Produces `onPreview(value: PreviewView | null, focus?: boolean): void`（可选 focus 默认 false）；只有主动 previewReport 成功传 true，App 的 onPreview 校验日期后更新 controlPreview 并在渲染后 focus/scroll 正文标题。现有自动 show 调用保持一个参数。
 
-- [ ] **19.1 写失败测试**：在既有 setup/response 测试辅助函数上添加下列测试；冻结测试时钟、延迟 Promise/假 timer，SMTP/POST 次数为零。执行结果查询与现有业务终态 message 分开断言。
+- [x] **19.1 写失败测试**：在既有 setup/response 测试辅助函数上添加下列测试；冻结测试时钟、延迟 Promise/假 timer，SMTP/POST 次数为零。执行结果查询与现有业务终态 message 分开断言。
 
 ```ts
 // query_feedback_loading_then_completed_even_when_result_is_unchanged
@@ -80,10 +80,10 @@ expect(screen.getByText(/已加载 2026-09-25 日报预览/)).toBeVisible();
 
 同时添加 `manual_query_and_preview_timeout_after_ten_seconds`、`late_preview_after_date_or_token_change_does_not_focus` 和 `automatic_preview_does_not_move_focus`；明确 404/网络/401 文案与失败后无有效旧推送预览。时间测试须断言 9999ms 未超时、10000ms 提示以及迟到结果不覆盖。
 
-- [ ] **19.2 运行 RED**（前端目录）：`npm test -- --run src/App.operations.test.tsx -t 'query_feedback|preview_feedback|manual_query_and_preview_timeout|late_preview_after|automatic_preview_does_not_move_focus'`。预期行为断言失败，记录退出码；原已存在竞态保护若直接通过如实标为回归保护，不制造 RED。
-- [ ] **19.3 最小实现**：OperationPanel 的 queryResult/previewReport 保持原签名，新增各动作的加载/完成/失败反馈与本次时间；null 清空 operation，不复用“令牌已验证”作反馈。主动 GET 用独立 10000ms 超时并按 ticket 清理，不能污染原 120000ms 轮询 deadline。App 保存标题 ref，渲染后消费 focus 标记；日期/Token/预览失效清掉标记。必要滚动尊重 prefers-reduced-motion；不拆分无关组件或引入依赖。
-- [ ] **19.4 运行 GREEN/回归**：重跑 19.2，再运行 `npm test -- --run src/App.operations.test.tsx src/App.test.tsx` 和 `npm run typecheck`，预期均退出 0。添加浏览器 `manual_preview_focus_and_feedback` / `query_feedback_and_readonly_requests`，在两个视口断言标题焦点、实际滚动可见、GET-only 和无横向溢出；运行 `npx playwright test --config playwright.operations.config.ts -g 'manual_preview_focus_and_feedback|query_feedback_and_readonly_requests'`。jsdom 不证明真实滚动。
-- [ ] **19.5 checkpoint/提交**：写 RED/GREEN 与剩余事项、更新 Task19 实际通过项。只提交本任务文件和记录，提交说明 `feat: clarify operation query and preview feedback`；全量交付仍待 Task21。
+- [x] **19.2 运行 RED**（前端目录）：`npm test -- --run src/App.operations.test.tsx -t 'query_feedback|preview_feedback|manual_query_and_preview_timeout|late_preview_after|automatic_preview_does_not_move_focus'`。预期行为断言失败，记录退出码；原已存在竞态保护若直接通过如实标为回归保护，不制造 RED。
+- [x] **19.3 最小实现**：OperationPanel 的 queryResult/previewReport 保持原签名，新增各动作的加载/完成/失败反馈与本次时间；null 清空 operation，不复用“令牌已验证”作反馈。主动 GET 用独立 10000ms 超时并按 ticket 清理，不能污染原 120000ms 轮询 deadline。App 保存标题 ref，渲染后消费 focus 标记；日期/Token/预览失效清掉标记。必要滚动尊重 prefers-reduced-motion；不拆分无关组件或引入依赖。
+- [x] **19.4 运行 GREEN/回归**：重跑 19.2，再运行 `npm test -- --run src/App.operations.test.tsx src/App.test.tsx` 和 `npm run typecheck`，预期均退出 0。添加浏览器 `manual_preview_focus_and_feedback` / `query_feedback_and_readonly_requests`，在两个视口断言标题焦点、实际滚动可见、GET-only 和无横向溢出；运行 `npx playwright test --config playwright.operations.config.ts -g 'manual_preview_focus_and_feedback|query_feedback_and_readonly_requests'`。jsdom 不证明真实滚动。
+- [x] **19.5 checkpoint/提交**：写 RED/GREEN 与剩余事项、更新 Task19 实际通过项。只提交本任务文件和记录，提交说明 `feat: clarify operation query and preview feedback`；全量交付仍待 Task21。
 
 ## Task 20：配置邮箱选择与邮件主动再次发送（N03–N05，依赖 Task19）
 

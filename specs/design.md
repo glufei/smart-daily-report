@@ -1,7 +1,7 @@
 # 智能日报生成器架构设计（Design）
 
 - 版本：v1.2（2026-10-01）
-- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划待审；§1.6 / ADR-006 定义增量，尚未实现。
+- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19完成，目标选择尚未实现。
 - 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.2.0（2026-10-05），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见版本说明。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已实现、真实业务验收通过）

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent, ReactNode, RefObject } from 'react';
 import type { PreviewView } from './operations';
 import { OperationPanel } from './OperationPanel';
 import { queryReport, safeUrl, validDate } from './api';
@@ -21,14 +21,14 @@ function Section({ title, status, children, empty }: {
   </section>;
 }
 
-function ReportContent({ report, sources: outcomes }: { report: Report; sources?: PreviewView['sources'] }) {
+function ReportContent({ report, sources: outcomes, headingRef }: { report: Report; sources?: PreviewView['sources']; headingRef?: RefObject<HTMLHeadingElement | null> }) {
   const status = (key: keyof SourceStatus) => outcomes?.[key]?.status ?? report.source_status[key];
   const failures = sources.filter(([key]) => status(key) === 'failure').map(([, label]) => label);
   return <div className="report">
     {failures.length > 0 && <div className="banner" role="status"><strong>部分数据源获取失败：{failures.join('、')}</strong>
       <p>日报已加载，对应板块显示“数据获取失败”。</p></div>}
     {outcomes === null && <p>来源启用情况未记录</p>}
-    <header className="report-head"><h2 className="report-team">{report.team_name}</h2>
+    <header className="report-head"><h2 ref={headingRef} tabIndex={-1} className="report-team">{report.team_name}</h2>
       <dl className="report-meta"><div><dt>报告日期</dt><dd>{report.report_date}</dd></div>
         <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{report.generated_at.replace('T', ' ')}（{report.generated_at.endsWith('Z') ? 'UTC+00:00' : `UTC${report.generated_at.slice(-6)}`}）</time></dd></div></dl>
       <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
@@ -54,9 +54,17 @@ function ReportContent({ report, sources: outcomes }: { report: Report; sources?
 export default function App() {
   const [date, setDate] = useState('');
   const [controlPreview, setControlPreview] = useState<PreviewView | null>(null);
-  const onPreview = useCallback((value: PreviewView | null) => {
-    if (!value || value.report.report_date === date) setControlPreview(value);
+  const reportHeading = useRef<HTMLHeadingElement>(null);
+  const previewFocus = useRef(false);
+  const onPreview = useCallback((value: PreviewView | null, focus = false) => {
+    if (!value || value.report.report_date === date) { previewFocus.current = !!value && focus; setControlPreview(value); }
   }, [date]);
+  useEffect(() => {
+    if (!controlPreview || !previewFocus.current) return;
+    previewFocus.current = false;
+    reportHeading.current?.focus({ preventScroll: true });
+    reportHeading.current?.scrollIntoView?.({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  }, [controlPreview]);
   const [view, setView] = useState<View>({ kind: 'initial' });
   const request = useRef<{ id: number; controller?: AbortController; timer?: ReturnType<typeof setTimeout> }>({ id: 0 });
   function cancel() {
@@ -101,7 +109,7 @@ export default function App() {
     </form></div></section>
     {import.meta.env.VITE_API_MODE === 'operations' && <div className="container"><OperationPanel date={date} onPreview={onPreview} preview={controlPreview} /></div>}
     <section className="result-section" aria-live="polite" aria-busy={view.kind === 'loading'}><div className="container">
-      {controlPreview ? <ReportContent report={controlPreview.report} sources={controlPreview.sources} /> : view.kind === 'report' ? <ReportContent report={view.report} /> : <div className={`state-card ${view.kind === 'error' ? 'state-card-error' : ''}`} role={view.kind === 'error' ? 'alert' : 'status'}>
+      {controlPreview ? <ReportContent report={controlPreview.report} sources={controlPreview.sources} headingRef={reportHeading} /> : view.kind === 'report' ? <ReportContent report={view.report} /> : <div className={`state-card ${view.kind === 'error' ? 'state-card-error' : ''}`} role={view.kind === 'error' ? 'alert' : 'status'}>
         {view.kind === 'initial' && <><span className="state-icon" aria-hidden="true">▦</span><h2>选择日期查看日报</h2><p>请选择报告日期并点击“查看日报”，加载当日的团队日报。</p></>}
         {view.kind === 'loading' && <><div className="spinner" aria-hidden="true" /><p>正在加载日报…</p></>}
         {view.kind === 'missing' && <><span className="state-icon" aria-hidden="true">▦</span><h2>该日期尚无日报</h2><p>所选日期 {view.date} 暂无日报记录，请换一个日期查看。</p></>}
