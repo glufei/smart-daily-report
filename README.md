@@ -255,6 +255,8 @@ $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 
 `--timezone` 只改变 API/页面的时间表示，不修改 SQLite 中保存的 UTC 时间；操作模式则自动使用 `config.yaml` 的 `team.timezone`。
 
+如果操作模式页面仍显示 `UTC+00:00`，请确认后端由当前项目代码以 `--config` 操作模式启动，并检查 `config.yaml` 中的 `team.timezone`；同时停止旧的日报 API 和前端服务，再按本节步骤重启后端与前端并刷新页面。UTC 时间会按团队时区换算显示，例如 `12:36 UTC` 对应 `Asia/Shanghai` 的 `20:36`。这只是显示时区不同，不需要重新采集或修改已保存的数据。
+
 前端使用第三节窗口 B 的命令（`VITE_API_MODE='readonly'`）。只读模式不需要操作令牌或外部凭证，不提供生成与推送，也不会自动创建缺失的历史库。
 
 ### 不打开页面，使用 CLI
