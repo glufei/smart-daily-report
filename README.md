@@ -2,9 +2,9 @@
 
 从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成「代码提交 / 任务进展 / 协作沟通」日报，保存到 SQLite，并按需发送邮件和飞书通知。
 
-已发布版本：[v1.2.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.2.0)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
+当前版本：[v1.3.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.0)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
 
-本分支另含已确认的操作反馈与收件人选择改进；原 v1.2.0 标签不变。本轮验证及交付边界见 [操作改进验收说明](docs/frontend/operation-feedback-email-selection-acceptance.md)。
+v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前逐地址确认。升级时前后端须一起更新；原 v1.2.0 标签不变。详见 [版本说明](docs/frontend/v1.3-release.md)，本轮验证及交付边界见 [操作改进验收说明](docs/frontend/operation-feedback-email-selection-acceptance.md)。
 
 ## 先选择你要做什么
 

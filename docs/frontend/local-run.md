@@ -1,6 +1,6 @@
 # 本机日报页面与 API
 
-v1.2.0 已发布，Task 11–18 已完成。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节；原 v1.2.0 记录作为发布基线。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。最新复核及验证边界见 [最终交付说明](v1.2-final-handover.md)。
+当前版本 v1.3.0，Task 11–21 开发和回归完成，发布记录见 [v1.3版本说明](v1.3-release.md)。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节；原 v1.2.0 记录作为发布基线。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。最新复核及验证边界见 [本轮交付说明](operation-feedback-email-selection-acceptance.md)；[v1.2最终交付说明](v1.2-final-handover.md)保留历史证据。
 
 ## Python 安装与启动（Windows PowerShell）
 

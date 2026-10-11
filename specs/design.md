@@ -1,8 +1,8 @@
 # 智能日报生成器架构设计（Design）
 
-- 版本：v1.2（2026-10-01）
-- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19–21开发、完整回归和独立审查修复完成，GitHub交付待选择。
-- 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.2.0（2026-10-05），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见版本说明。
+- 版本：v1.3（2026-10-11）
+- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19–21开发、完整回归和独立审查修复完成，用户已授权PR#4合并main并发布v1.3.0。
+- 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.3.0（2026-10-11），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见 docs/frontend/v1.3-release.md。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已实现、真实业务验收通过）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
@@ -95,7 +95,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 - 现有机器人实现只检查旧 `StatusCode` 并默认缺失为 0；v1.2 按平台文档核对新 `code` 与旧字段，明确失败码、矛盾字段或缺失成功证据不能算成功。现有 SMTP 未处理 `send_message()` 返回的部分拒绝收件人，也列入 Task 17 的先失败测试。
 - 来源的成员/顶层重复状态仍沿用 §3 的顶层约定；不趁本轮清理无关模型。Notifier 的“不确定发送”安全语义优先于旧的笼统重试规则，只作相关最小修订并补 CLI 回归。
 
-### 1.6 下一轮操作反馈与邮件目标选择（已实现，完整回归及独立审查修复完成，待GitHub交付）
+### 1.6 下一轮操作反馈与邮件目标选择（已实现，完整回归及独立审查修复完成，交付流程为PR#4 → main → v1.3.0）
 
 上游为 proposal §8/N01–N06；决策见 [ADR-006](adrs/006-operation-feedback-email-selection.md)，具体字段及迁移见 [操作契约 §7](contracts/web-operations.md)。本节是已实现增量，§1.4 的固定目标和整邮件渠道重复限制保留为 v1.2 历史规则，实施后按本节明确替换，不同时应用两种规则。
 
@@ -113,7 +113,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 
 ## 2. 技术决策与 ADR
 
-ADR-006（规范及计划已确认，已实现且独立审查修复完成，待GitHub交付）：见 [`adrs/006-operation-feedback-email-selection.md`](adrs/006-operation-feedback-email-selection.md)，记录可选配置邮箱、邮件主动再次发送与请求去重的边界。
+ADR-006（规范及计划已确认，已实现且独立审查修复完成，交付流程为PR#4 → main → v1.3.0）：见 [`adrs/006-operation-feedback-email-selection.md`](adrs/006-operation-feedback-email-selection.md)，记录可选配置邮箱、邮件主动再次发送与请求去重的边界。
 
 ADR-005（v1.2 已确认）：见 [`adrs/005-superpowers-tdd.md`](adrs/005-superpowers-tdd.md)，明确 Superpowers 是开发流程工具、SDD 文档是真实需求来源；实施计划审查后执行严格 RED/GREEN/REFACTOR、审查和完成前验证。新增浏览器操作沿用 §1.4 的轻量方案。
 
