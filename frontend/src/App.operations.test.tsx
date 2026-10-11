@@ -261,7 +261,7 @@ test('failed_lookup_cannot_offer_retry_until_non_acceptance_is_known', async () 
 
 
 test('restored_delivery_is_observed_without_starting_generation_or_delivery', async () => {
-  const value = { ...operationFixture(), kind: 'delivery', report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
+  const value = { ...operationFixture(), kind: 'delivery', email_recipients: ['fixture@example.invalid'], report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
   const fetchMock = vi.fn().mockResolvedValue(response(value)); setup(fetchMock); await screen.findByText('正在推送日报…');
   expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled(); expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
 });
@@ -278,10 +278,10 @@ test('completed_task_shows_real_completion_without_invented_previous_status', as
 
 test('cancel_confirmation_never_sends_and_shows_fixed_targets_and_version', async () => {
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockImplementation(() => Promise.resolve(response(previewFixture()))); setup(fetchMock);
-  await screen.findByRole('heading', { name: '示例研发团队' }); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
+  await screen.findByRole('heading', { name: '示例研发团队' }); await selectFixtureRecipient(); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
   const dialog = await screen.findByRole('dialog', { name: '确认推送日报' });
   expect(within(dialog).getByText('2026-09-25')).toBeInTheDocument(); expect(within(dialog).getByText('a'.repeat(64))).toBeInTheDocument();
-  expect(within(dialog).getByText('邮件（1 位收件人）')).toBeInTheDocument(); expect(within(dialog).getByText('配置的日报群')).toBeInTheDocument();
+  expect(within(dialog).getByText('fixture@example.invalid')).toBeInTheDocument(); expect(within(dialog).getByText('配置的日报群')).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '取消' })); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(fetchMock.mock.calls.filter(call => call[1].method === 'POST')).toHaveLength(0);
 });
@@ -292,44 +292,48 @@ test('confirmation_sends_exactly_once_and_only_the_previewed_version', async () 
     if (url.endsWith('/current')) return Promise.resolve(response(operationFixture('succeeded')));
     if (options.method === 'POST') {
       posts.push(JSON.parse(options.body as string));
-      return Promise.resolve(response({ ...operationFixture(), kind: 'delivery', request_id: (options.headers as Record<string,string>)['Idempotency-Key'],
+      return Promise.resolve(response({ ...operationFixture(), kind: 'delivery', email_recipients: ['fixture@example.invalid'], request_id: (options.headers as Record<string,string>)['Idempotency-Key'],
         report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null } }, 202));
     }
     return Promise.resolve(response(previewFixture()));
   }); setup(fetchMock); await screen.findByRole('heading', { name: '示例研发团队' });
-  await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: '推送日报' })); fireEvent.click(screen.getByRole('button', { name: '确认推送' }));
+  await selectFixtureRecipient(); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: '推送日报' })); fireEvent.click(screen.getByRole('button', { name: '确认推送' }));
   await screen.findByText('正在推送日报…');
-  expect(posts).toEqual([{ report_date: '2026-09-25', report_revision: 'a'.repeat(64), channels: ['email','lark'] }]);
+  expect(posts).toEqual([{ report_date: '2026-09-25', report_revision: 'a'.repeat(64), channels: ['email','lark'], email_recipients: ['fixture@example.invalid'] }]);
   expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled();
 });
 
 test('date_change_invalidates_open_delivery_confirmation', async () => {
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockImplementation(() => Promise.resolve(response(previewFixture()))); setup(fetchMock);
-  await screen.findByRole('heading', { name: '示例研发团队' }); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: '推送日报' })); await screen.findByRole('dialog');
+  await screen.findByRole('heading', { name: '示例研发团队' }); await selectFixtureRecipient(); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: '推送日报' })); await screen.findByRole('dialog');
   fireEvent.change(screen.getByLabelText('报告日期'), { target: { value: '2026-09-26' } }); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(fetchMock.mock.calls.filter(call => call[1].method === 'POST')).toHaveLength(0);
 });
 
 
 function deliveryFixture(status = 'succeeded', email = 'accepted', lark = 'accepted') {
-  return { ...operationFixture(status), kind: 'delivery', report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null },
+  return { ...operationFixture(status), kind: 'delivery', email_recipients: ['fixture@example.invalid'], report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null },
     deliveries: { email: { status: email, attempts: 1, error_code: null }, lark: { status: lark, attempts: 1, error_code: null } } };
 }
+async function selectFixtureRecipient() {
+  const checkbox = await screen.findByRole('checkbox', { name: 'fixture@example.invalid' });
+  if (!(checkbox as HTMLInputElement).checked) fireEvent.click(checkbox);
+}
 async function openDelivery() {
-  await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled());
+  await selectFixtureRecipient(); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '推送日报' })); return screen.findByRole('dialog');
 }
-test.each(['accepted', 'partial_failure', 'unknown', 'pending'])('previous %s blocks whole-channel resend but rejected channel can be selected', async status => {
-  const preview = { ...previewFixture(), targets: { email: { enabled: true, label: '邮件（1 位收件人）', previous: { status, attempts: 1, error_code: null } },
+test.each(['accepted', 'partial_failure', 'unknown', 'pending'])('previous %s keeps email manually selectable while lark rejection is retryable', async status => {
+  const preview = { ...previewFixture(), targets: { email: { enabled: true, label: '邮件（1 位收件人）', recipients: ['fixture@example.invalid'], previous: { status, attempts: 1, error_code: null } },
     lark: { enabled: true, label: '配置的日报群', previous: { status: 'rejected', attempts: 1, error_code: null } } } };
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValue(response(preview)); setup(fetchMock);
-  const dialog = await openDelivery(); expect(screen.getByRole('checkbox', { name: '邮件' })).toBeDisabled();
-  expect(screen.getByRole('checkbox', { name: '邮件' })).not.toBeChecked(); expect(screen.getByRole('checkbox', { name: '飞书' })).toBeChecked();
-  expect(within(dialog).queryByText('邮件（1 位收件人）')).not.toBeInTheDocument(); expect(within(dialog).getByText('配置的日报群')).toBeInTheDocument();
+  const dialog = await openDelivery(); expect(screen.getByRole('checkbox', { name: '邮件' })).toBeEnabled();
+  expect(screen.getByRole('checkbox', { name: '邮件' })).toBeChecked(); expect(screen.getByRole('checkbox', { name: '飞书' })).toBeChecked();
+  expect(within(dialog).getByText('fixture@example.invalid')).toBeInTheDocument(); expect(within(dialog).getByText('配置的日报群')).toBeInTheDocument();
 });
 test('channel_selection_zero_disables_confirmation_and_cancel_event_is_safe', async () => {
   setup(vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValue(response(previewFixture())));
-  await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled());
+  await selectFixtureRecipient(); await waitFor(() => expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled());
   fireEvent.click(screen.getByRole('checkbox', { name: '邮件' })); fireEvent.click(screen.getByRole('checkbox', { name: '飞书' }));
   expect(screen.getByRole('button', { name: '推送日报' })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: '邮件' })); const dialog = await openDelivery();
@@ -338,10 +342,10 @@ test('channel_selection_zero_disables_confirmation_and_cancel_event_is_safe', as
 });
 test.each([['succeeded', 'accepted', 'accepted', '所选渠道已受理，请核对实际收件'],
   ['partial_failure', 'accepted', 'rejected', '部分渠道受理失败，请核对渠道结果'],
-  ['unknown', 'unknown', 'accepted', '推送结果未知，请先核实，不能重复推送'],
+  ['unknown', 'unknown', 'accepted', '推送结果未知，请先核实；未自动重发'],
   ['failed', 'rejected', 'rejected', '所选渠道明确拒绝，可核对后仅重试失败渠道']])('delivery %s reports evidence without claiming receipt', async (status, email, lark, text) => {
   const value = deliveryFixture(status, email, lark);
-  const preview = { ...previewFixture(), targets: { email: { enabled: true, label: '邮件（1 位收件人）', previous: value.deliveries.email },
+  const preview = { ...previewFixture(), targets: { email: { enabled: true, label: '邮件（1 位收件人）', recipients: ['fixture@example.invalid'], previous: value.deliveries.email },
     lark: { enabled: true, label: '配置的日报群', previous: value.deliveries.lark } } };
   const fetchMock = vi.fn().mockResolvedValueOnce(response(value)).mockResolvedValue(response(preview)); setup(fetchMock);
   await screen.findByText(text); await screen.findByRole('heading', { name: '示例研发团队' });
@@ -513,4 +517,272 @@ test('unauthenticated_generation_explains_disabled_action_without_request', () =
   expect(button).toBeDisabled();
   expect(button).toHaveAccessibleDescription(/请先输入并验证操作令牌/);
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+
+test('query_feedback_loading_then_completed_even_when_result_is_unchanged', async () => {
+  let resolve!: (value: Response) => void;
+  const fetchMock = vi.fn().mockImplementation((url: string) => url.endsWith('/current') ? Promise.resolve(response(operationFixture('succeeded')))
+    : url.includes('/preview') ? Promise.resolve(response(previewFixture())) : new Promise<Response>(done => { resolve = done; }));
+  setup(fetchMock); await screen.findByRole('heading', { name: '示例研发团队' });
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T02:00:00Z'));
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  expect(screen.getByRole('button', { name: '正在查询执行结果…' })).toBeDisabled();
+  await act(async () => resolve(response(operationFixture('succeeded'))));
+  expect(screen.getByText(/执行结果查询完成/)).toBeVisible();
+  const firstTime = screen.getByLabelText('本次查询时间').getAttribute('datetime');
+  vi.setSystemTime(new Date('2026-10-11T02:01:00Z'));
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await act(async () => resolve(response(operationFixture('succeeded'))));
+  expect(screen.getByLabelText('本次查询时间').getAttribute('datetime')).not.toBe(firstTime);
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test('query_feedback_null_reports_empty_without_authentication_message', async () => {
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response(null))); setup(fetchMock);
+  await screen.findByText('令牌已验证');
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await screen.findByText('暂无执行记录');
+  expect(screen.queryByText('令牌已验证')).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: '推送执行结果' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test('preview_feedback_success_focuses_current_report_heading', async () => {
+  let resolve!: (value: Response) => void;
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(done => { resolve = done; }));
+  setup(fetchMock); await screen.findByText('令牌已验证');
+  fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  await act(async () => resolve(response(previewFixture())));
+  expect(screen.getByRole('heading', { name: '示例研发团队' })).toHaveFocus();
+  expect(screen.getByText(/已加载 2026-09-25 日报预览/)).toBeVisible();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test.each(['查询执行结果', '预览日报'])('manual_query_and_preview_timeout_after_ten_seconds: %s', async action => {
+  let resolve!: (value: Response) => void;
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(done => { resolve = done; }));
+  setup(fetchMock); await screen.findByText('令牌已验证'); vi.useFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: action }));
+  await act(async () => vi.advanceTimersByTimeAsync(9999));
+  expect(screen.queryByText(/请求超时/)).not.toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  expect(screen.getByText(/请求超时/)).toBeVisible();
+  expect(screen.getByRole('button', { name: action })).toBeEnabled();
+  await act(async () => resolve(response(action === '预览日报' ? previewFixture() : null)));
+  expect(screen.getByText(/请求超时/)).toBeVisible();
+  expect(screen.queryByRole('heading', { name: '示例研发团队' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test.each(['报告日期', '操作令牌'])('late_preview_after_date_or_token_change_does_not_focus: %s', async field => {
+  let resolve!: (value: Response) => void;
+  setup(vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(done => { resolve = done; })));
+  await screen.findByText('令牌已验证'); fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  const input = screen.getByLabelText(field); input.focus();
+  fireEvent.change(input, { target: { value: field === '报告日期' ? '2026-09-24' : 'new-private-token' } });
+  await act(async () => resolve(response(previewFixture())));
+  expect(input).toHaveFocus();
+  expect(screen.queryByRole('heading', { name: '示例研发团队' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/已加载 2026-09-25 日报预览/)).not.toBeInTheDocument();
+});
+
+test('automatic_preview_does_not_move_focus', async () => {
+  let resolve!: (value: Response) => void;
+  setup(vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockImplementation(() => new Promise<Response>(done => { resolve = done; })));
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
+  const input = screen.getByLabelText('操作令牌'); input.focus();
+  await act(async () => resolve(response(previewFixture())));
+  expect(input).toHaveFocus();
+});
+
+test.each([
+  ['missing', 404, { error: { code: 'report_not_found' } }, '该日期尚无日报'],
+  ['unauthorized', 401, { error: { code: 'operation_unauthorized' } }, '操作令牌无效或未提供'],
+  ['network', 0, null, '无法连接日报服务'],
+] as const)('preview_feedback_failure_is_explicit_and_cannot_send: %s', async (_kind, status, body, message) => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(null));
+  if (status) fetchMock.mockResolvedValue(response(body, status)); else fetchMock.mockRejectedValue(new TypeError('synthetic network loss'));
+  setup(fetchMock); await screen.findByText('令牌已验证'); fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  await screen.findByText(message);
+  expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+
+test('preview_feedback_loading_before_response', async () => {
+  setup(vi.fn().mockResolvedValueOnce(response(null)).mockImplementation(() => new Promise<Response>(() => {})));
+  await screen.findByText('令牌已验证'); fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  expect(screen.getByRole('button', { name: '正在加载日报预览…' })).toBeDisabled();
+});
+
+test('query_feedback_completion_describes_the_execution_date', async () => {
+  const value = { ...operationFixture('succeeded'), report_date: '2026-09-24' };
+  setup(vi.fn().mockImplementation(() => Promise.resolve(response(value)))); await screen.findByText('正在查看 2026-09-24 的操作结果');
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await screen.findByText(/执行结果查询完成/);
+  expect(screen.getByLabelText('本次查询时间')).toBeVisible();
+  expect(screen.getByText(/操作：生成日报 · 2026-09-24/)).toBeVisible();
+});
+
+
+function recipientPreview() {
+  const value = previewFixture(); value.targets.email.recipients = ['member@example.com', 'mentor@example.com']; return value;
+}
+async function setupRecipients(previous: string | null = null, legacy = false) {
+  const preview = recipientPreview();
+  if (previous) preview.targets.email.previous = { status: previous, attempts: 1, error_code: null } as any;
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(legacy ? { ...deliveryFixture(), email_recipients: null } : operationFixture('succeeded')));
+    if (options.method === 'POST') {
+      const body = JSON.parse(options.body as string);
+      return Promise.resolve(response({ ...deliveryFixture('succeeded', 'accepted', 'not_requested'),
+        request_id: (options.headers as Record<string, string>)['Idempotency-Key'], email_recipients: body.email_recipients,
+        deliveries: { email: { status: 'accepted', attempts: 1, error_code: null }, lark: { status: 'not_requested', attempts: 0, error_code: null } } }));
+    }
+    return Promise.resolve(response(preview));
+  });
+  setup(fetchMock); await screen.findByRole('heading', { name: '示例研发团队' }); return fetchMock;
+}
+
+test('email_selection_requires_explicit_recipient_and_confirmation', async () => {
+  const fetchMock = await setupRecipients();
+  expect(screen.getByRole('checkbox', { name: 'mentor@example.com' })).not.toBeChecked();
+  expect(screen.getByRole('checkbox', { name: 'member@example.com' })).not.toBeChecked();
+  expect(screen.getByText('请选择至少一位邮件收件人')).toBeVisible();
+  expect(screen.getByRole('button', { name: '推送日报' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: '飞书' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' }));
+  fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByText('mentor@example.com')).toBeVisible();
+  expect(within(dialog).queryByText('member@example.com')).not.toBeInTheDocument();
+  expect(within(dialog).getByText('再次推送可能产生重复邮件')).toBeVisible();
+  fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+  expect(fetchMock.mock.calls.filter(call => call[1].method === 'POST')).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: '推送日报' })); fireEvent.click(screen.getByRole('button', { name: '确认推送' }));
+  await screen.findByText('所选渠道已受理，请核对实际收件');
+  const posts = fetchMock.mock.calls.filter(call => call[1].method === 'POST');
+  expect(posts).toHaveLength(1); expect(JSON.parse(posts[0][1].body as string)).toMatchObject({ channels: ['email'], email_recipients: ['mentor@example.com'] });
+  expect(within(screen.getByRole('region', { name: '推送执行结果' })).getByText(/本次邮件收件人：mentor@example.com/)).toBeVisible();
+});
+
+test.each(['accepted', 'unknown', 'partial_failure'])('repeatable_email_%s_requires_new_explicit_confirmation', async previous => {
+  const fetchMock = await setupRecipients(previous);
+  expect(screen.getByRole('checkbox', { name: '邮件' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' }));
+  fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
+  expect(within(screen.getByRole('dialog')).getByText('再次推送可能产生重复邮件')).toBeVisible();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+test('legacy_target_is_not_inferred_from_current_preview', async () => {
+  await setupRecipients(null, true);
+  expect(screen.getByText('历史记录未记录具体收件人')).toBeVisible();
+});
+
+test.each(['报告日期', '操作令牌', '预览日报'])('changing_%s_invalidates_recipient_confirmation', async field => {
+  const fetchMock = await setupRecipients();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' })); fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
+  await screen.findByRole('dialog');
+  if (field === '预览日报') fireEvent.click(screen.getByRole('button', { name: field }));
+  else fireEvent.change(screen.getByLabelText(field), { target: { value: field === '报告日期' ? '2026-09-24' : 'changed-token' } });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  if (field === '预览日报') {
+    await screen.findByRole('checkbox', { name: 'mentor@example.com' });
+    expect(screen.getByRole('checkbox', { name: 'mentor@example.com' })).not.toBeChecked();
+  }
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+
+test('lost_delivery_response_keeps_confirmed_recipient_snapshot_on_explicit_original_retry', async () => {
+  const posts: { key: string; body: string }[] = [];
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(operationFixture('succeeded')));
+    if (url.includes('/by-key/')) return Promise.resolve(response({ error: { code: 'operation_not_found' } }, 404));
+    if (options.method === 'POST') {
+      posts.push({ key: (options.headers as Record<string, string>)['Idempotency-Key'], body: options.body as string });
+      return posts.length === 1 ? Promise.reject(new TypeError('synthetic loss')) : Promise.resolve(response({ ...deliveryFixture(),
+        request_id: posts[0].key, email_recipients: ['mentor@example.com'] }));
+    }
+    return Promise.resolve(response(recipientPreview()));
+  });
+  setup(fetchMock); await screen.findByRole('checkbox', { name: 'mentor@example.com' });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' })); fireEvent.click(screen.getByRole('checkbox', { name: '飞书' }));
+  fireEvent.click(screen.getByRole('button', { name: '推送日报' })); fireEvent.click(screen.getByRole('button', { name: '确认推送' }));
+  await screen.findByText('执行结果尚未确认'); expect(posts).toHaveLength(1);
+  // Later edits may not change what an explicit original-request retry submits.
+  fireEvent.click(screen.getByRole('checkbox', { name: 'member@example.com' }));
+  expect(screen.getByRole('button', { name: '推送日报' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '重试原请求' }));
+  await screen.findByText('所选渠道已受理，请核对实际收件');
+  expect(posts).toHaveLength(2); expect(posts[1]).toEqual(posts[0]);
+  expect(JSON.parse(posts[1].body).email_recipients).toEqual(['mentor@example.com']);
+});
+
+test('email_selection_lark_only_sends_empty_address_list', async () => {
+  const posts: Record<string, unknown>[] = [];
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(operationFixture('succeeded')));
+    if (options.method === 'POST') {
+      posts.push(JSON.parse(options.body as string));
+      return Promise.resolve(response({ ...deliveryFixture(), request_id: (options.headers as Record<string, string>)['Idempotency-Key'], email_recipients: [] }));
+    }
+    return Promise.resolve(response(recipientPreview()));
+  }); setup(fetchMock); await screen.findByRole('checkbox', { name: 'mentor@example.com' });
+  fireEvent.click(screen.getByRole('checkbox', { name: '邮件' })); fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
+  const dialog = screen.getByRole('dialog'); expect(within(dialog).queryByText('mentor@example.com')).not.toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认推送' })); await screen.findByText('所选渠道已受理，请核对实际收件');
+  expect(posts).toEqual([{ report_date: '2026-09-25', report_revision: 'a'.repeat(64), channels: ['lark'], email_recipients: [] }]);
+});
+
+test.each(['accepted', 'partial_failure', 'unknown', 'pending'])('mixed_repeatable_email_and_blocked_lark_%s_never_sends', async status => {
+  const preview = recipientPreview(); preview.targets.lark.previous = { status, attempts: 1, error_code: null } as any;
+  const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve(response(url.endsWith('/current') ? operationFixture('succeeded') : preview)));
+  setup(fetchMock); await screen.findByRole('checkbox', { name: 'mentor@example.com' });
+  const lark = screen.getByRole('checkbox', { name: '飞书' });
+  expect(lark).toBeDisabled(); expect(lark).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' }));
+  fireEvent.click(screen.getByRole('button', { name: '推送日报' }));
+  expect(within(screen.getByRole('dialog')).queryByText('配置的日报群')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '取消' }));
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
+});
+
+
+test('email_selection_count_explains_exactly_how_many_addresses_will_receive', async () => {
+  await setupRecipients();
+  expect(screen.getByText('已选择 0 位邮件收件人')).toBeVisible();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'mentor@example.com' }));
+  expect(screen.getByText('已选择 1 位邮件收件人')).toBeVisible();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'member@example.com' }));
+  expect(screen.getByText('已选择 2 位邮件收件人')).toBeVisible();
+});
+
+
+test.each(['timeout', 'failure'])('successful_query_is_not_misreported_by_attached_preview_%s', async outcome => {
+  vi.useFakeTimers(); let previewCalls = 0; let resolveLate!: (value: Response) => void;
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url.endsWith('/current') || url.includes('/operations/')) return Promise.resolve(response(operationFixture('succeeded')));
+    if (++previewCalls === 1) return Promise.resolve(response(previewFixture()));
+    return outcome === 'failure' ? Promise.resolve(response({ error: { code: 'storage_read_failed' } }, 500))
+      : new Promise<Response>(resolve => { resolveLate = resolve; });
+  }); setup(fetchMock); await act(async () => {});
+  fireEvent.click(screen.getByRole('checkbox', { name: 'fixture@example.invalid' }));
+  expect(screen.getByRole('button', { name: '推送日报' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' })); await act(async () => {});
+  expect(screen.getByText(/执行结果查询完成/)).toBeVisible();
+  expect(screen.getByLabelText('本次查询时间')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(screen.queryByText('请求超时，请重新查询执行结果。')).not.toBeInTheDocument();
+  expect(screen.getByText(outcome === 'failure' ? '日报读取失败，请稍后重新查询' : '日报预览请求超时，请点击“预览日报”重试。')).toBeVisible();
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeEnabled();
+  if (outcome === 'timeout') {
+    await act(async () => resolveLate(response(previewFixture())));
+    expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
+  }
+  expect(screen.getByText(/执行结果查询完成/)).toBeVisible();
+  expect(fetchMock.mock.calls.every(call => call[1].method === 'GET')).toBe(true);
 });

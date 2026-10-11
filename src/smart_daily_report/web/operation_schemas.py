@@ -34,6 +34,20 @@ Revision = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 class DeliveryRequest(GenerationRequest):
     report_revision: Revision
     channels: list[Literal["email", "lark"]]
+    email_recipients: list[str] = Field(default_factory=list)
+
+    @field_validator("email_recipients")
+    @classmethod
+    def canonical_recipients(cls, value):
+        if len(set(value)) != len(value) or any(not item or any(c.isspace() for c in item) for item in value):
+            raise ValueError("Select distinct non-blank configured addresses")
+        return sorted(value)
+
+    @model_validator(mode="after")
+    def email_requires_selected_recipients(self):
+        if ("email" in self.channels) != bool(self.email_recipients):
+            raise ValueError("Email selection must match its channel")
+        return self
 
     @field_validator("channels")
     @classmethod
@@ -92,6 +106,7 @@ class OperationView(GenerationRequest):
     sources: SourceOutcomes
     deliveries: DeliveryOutcomes
     error_code: SafeErrorCode | None
+    email_recipients: list[str] | None = None
 
     @model_validator(mode="after")
     def source_evidence_matches_kind(self):
@@ -109,8 +124,12 @@ class TargetView(OperationModel):
     previous: DeliveryOutcome | None
 
 
+class EmailTargetView(TargetView):
+    recipients: list[str]
+
+
 class TargetViews(OperationModel):
-    email: TargetView
+    email: EmailTargetView
     lark: TargetView
 
 

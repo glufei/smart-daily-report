@@ -33,7 +33,7 @@ def test_generation_request_rejects_non_calendar_input(value):
 def test_delivery_request_accepts_confirmed_revision_and_canonical_channels():
     cls = getattr(operation_schemas(), 'DeliveryRequest', None)
     assert cls is not None, 'Confirmed delivery contract is missing'
-    body = cls.model_validate_json(json.dumps({'report_date': '2026-09-25', 'report_revision': 'a'*64, 'channels': ['lark','email']}))
+    body = cls.model_validate_json(json.dumps({'report_date': '2026-09-25', 'report_revision': 'a'*64, 'channels': ['lark','email'], 'email_recipients': ['lead@test']}))
     assert body.channels == ['email','lark']
     assert body.report_revision == 'a'*64
 
@@ -46,7 +46,7 @@ def test_delivery_request_accepts_confirmed_revision_and_canonical_channels():
 def test_strict_operation_request_rejects_invalid_input(changes):
     cls = getattr(operation_schemas(), 'DeliveryRequest', None)
     assert cls is not None
-    data = {'report_date': '2026-09-25', 'report_revision': 'a'*64, 'channels': ['email']}
+    data = {'report_date': '2026-09-25', 'report_revision': 'a'*64, 'channels': ['email'], 'email_recipients': ['lead@test']}
     with pytest.raises(ValidationError):
         cls.model_validate_json(json.dumps({**data, **changes}))
 
@@ -207,3 +207,19 @@ def test_generation_and_delivery_cannot_mix_source_evidence():
     with pytest.raises(ValidationError): cls.model_validate_json(json.dumps(data))
     data=operation_record(); data['kind']='delivery'; data['report_revision']='a'*64
     with pytest.raises(ValidationError): cls.model_validate_json(json.dumps(data))
+
+
+
+def test_legacy_operation_has_unknown_targets_without_database_rewrite(tmp_path):
+    from smart_daily_report.shared.operation_storage import OperationStore
+    from uuid import uuid4
+    import sqlite3
+    store=OperationStore(tmp_path/'operations.sqlite3'); store.initialize()
+    record=operation_record(); record.update(kind='delivery',sources={name:None for name in record['sources']})
+    with sqlite3.connect(store.path) as connection:
+        connection.execute('INSERT INTO operations VALUES (?,?,?,?,?,?)',
+            (record['operation_id'],record['request_id'],'legacy','running',record['created_at'],json.dumps(record)))
+    before=store.path.read_bytes()
+    result=operation_schemas().OperationView.model_validate_json(json.dumps(store.get(record['operation_id'])))
+    assert result.email_recipients is None
+    assert store.path.read_bytes()==before

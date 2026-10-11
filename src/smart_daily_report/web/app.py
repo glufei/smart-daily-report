@@ -45,7 +45,7 @@ def create_app(db_path: Path, allowed_hosts: Sequence[str] = ("127.0.0.1", "loca
                operations=None, operation_token: str | None = None,
                allowed_origins: Sequence[str] = ALLOWED_ORIGINS) -> FastAPI:
     """Read a fixed database; no collectors, notifiers or secret configuration."""
-    app = FastAPI(title="智能日报只读接口", version="1.2.0", docs_url=None, redoc_url=None)
+    app = FastAPI(title="智能日报只读接口", version="1.3.0", docs_url=None, redoc_url=None)
     database = db_path.resolve()
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
     app.add_middleware(CORSMiddleware, allow_origins=list(allowed_origins),

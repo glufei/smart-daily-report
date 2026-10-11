@@ -8,5 +8,5 @@ export function operationFixture(status = 'running') {
 }
 export function previewFixture() {
   return { report: reportFixture(), report_revision: 'a'.repeat(64), sources: operationFixture().sources,
-    targets: { email: { enabled: true, label: '邮件（1 位收件人）', previous: null }, lark: { enabled: true, label: '配置的日报群', previous: null } } };
+    targets: { email: { enabled: true, label: '邮件（1 位收件人）', previous: null, recipients: ['fixture@example.invalid'] }, lark: { enabled: true, label: '配置的日报群', previous: null } } };
 }

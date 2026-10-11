@@ -2,7 +2,9 @@
 
 从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成「代码提交 / 任务进展 / 协作沟通」日报，保存到 SQLite，并按需发送邮件和飞书通知。
 
-当前版本：[v1.2.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.2.0)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
+当前版本：[v1.3.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.0)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
+
+v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前逐地址确认。升级时前后端须一起更新；原 v1.2.0 标签不变。详见 [版本说明](docs/frontend/v1.3-release.md)，本轮验证及交付边界见 [操作改进验收说明](docs/frontend/operation-feedback-email-selection-acceptance.md)。
 
 ## 先选择你要做什么
 
@@ -17,7 +19,7 @@
 
 ## 一、当前电脑直接启动
 
-这部分适用于作者已经配置好的电脑。**真实配置和历史数据库保留在 `E:\worktrees\v1-2-real-integration\smart-daily-report`**，Python 环境位于 `E:\MyCode\smart-daily-report\.runtime\venv`。main 已同步发布代码，但 Git 不会同步私有配置和数据库；因此以下命令继续使用已验收的工作区。
+这部分适用于作者已经配置好的电脑。**真实配置和历史数据库保留在 `E:\worktrees\v1-2-real-integration\smart-daily-report`**，Python 环境位于 `E:\MyCode\smart-daily-report\.runtime\venv`。本轮改进代码在 `E:\worktrees\operation-feedback-email-selection\smart-daily-report`，与私人数据分开保存。下面后端在原配置目录运行，但通过 PYTHONPATH 读取本轮代码；前端也从本轮代码目录启动。首次克隆者使用第四节，不能照抄作者私有目录。
 
 ### 1. 窗口 A：启动真实后端
 
@@ -25,7 +27,7 @@
 
 ```powershell
 Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report'
-$env:PYTHONPATH = Join-Path (Get-Location) 'src'
+$env:PYTHONPATH = 'E:\worktrees\operation-feedback-email-selection\smart-daily-report\src'
 
 Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
     $entry = $_.Trim()
@@ -50,7 +52,7 @@ Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
 再打开一个 PowerShell 窗口，执行：
 
 ```powershell
-Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report\frontend'
+Set-Location 'E:\worktrees\operation-feedback-email-selection\smart-daily-report\frontend'
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
@@ -64,10 +66,25 @@ npm run dev
 | --- | --- | --- |
 | 查看已有日报 | 选择日期 → 点击「查看日报」；无需令牌 | 否，也不重新采集 |
 | 采集并生成 | 输入 `.env` 中的 `DAILY_REPORT_WEB_TOKEN` →「验证令牌」→ 选择工作日 →「采集并生成」 | 否，只采集、保存和预览 |
-| 发送日报 | 验证令牌 →「预览日报」→ 核对内容和目标 → 选择渠道 →「推送日报」→「确认推送」 | 是，发送已确认的版本 |
-| 查看执行进度 | 验证令牌后点击「查询执行结果」 | 否 |
+| 发送日报 | 验证令牌 →「预览日报」→ 核对内容 → 选择渠道和具体邮箱 →「推送日报」→ 核对弹窗地址 →「确认推送」 | 是，发送已确认的版本 |
+| 查看执行进度 | 验证令牌后点击「查询执行结果」，查看操作日期、状态与本次查询时间 | 否 |
 
 **操作令牌是本项目的 `DAILY_REPORT_WEB_TOKEN`，不是 GitHub Token、飞书密钥或邮箱授权码。** 空令牌验证会提示输入；令牌未验证时，「采集并生成」保持禁用。页脚「查看已保存的团队日报」是说明文字，查询入口在页面上方。
+
+### 如何只给一位收件人发送
+
+1. 选择日报日期，输入本项目操作令牌，点击「验证令牌」。
+2. 点击「预览日报」，看到“已加载…”提示后核对下方正文；成功后页面会定位到正文标题。没有日报时先「采集并生成」，此时不会发送。
+3. 勾选「邮件」，在“邮件收件人”中只勾选要发送的邮箱。例如配置中有 `member@example.com` 和 `mentor@example.com`，只勾选后者，就只给后者发邮件。地址由服务器配置提供，页面不支持随意输入新地址，初始全部未选。
+4. 不需要飞书通知时，取消「飞书」。只发飞书则取消「邮件」，无需选择邮箱。
+5. 点击「推送日报」，逐项核对弹窗中的日期、版本、邮箱地址与飞书目标。点击「取消」不发送；点击「确认推送」才提交。
+6. 查看“推送执行结果”中的本次邮箱和渠道状态。「服务商已受理」表示 SMTP 已接受，仍需检查实际收件箱；Gmail 找不到时检查垃圾邮件，找到后点击“不是垃圾邮件”，可为可信发件人设置“从不发送至垃圾邮件”过滤器。
+
+**邮件可以主动再次发送同一日报。** 每次重新选择收件人并独立确认都会产生一个新请求，可能产生重复邮件；系统不按收件人去重。飞书同一版本已受理、部分受理或结果未知时继续禁用再次发送。
+
+断线后先「查询执行结果」，系统查询原请求，不自动再次发送；只有原请求未找到时才提供「重试原请求」，该重试保留原先确认的地址。不要删除操作数据库来解除限制。日期、令牌或预览变化会清空邮箱选择并使旧确认失效。
+
+“查询执行结果”和“预览日报”都会就近显示加载、完成或失败提示。查询完成会更新“本次查询时间”，即使结果没有变化；主动查询/预览等待超过10秒会提示重新操作，后台任务不会因此取消。
 
 本机已有以下真实日报，可先选择这些日期查看：
 

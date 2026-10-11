@@ -1,6 +1,7 @@
 """Real API/SQLite/pipeline with synthetic HTTP/SMTP boundaries; never user config."""
 import argparse
 from datetime import date, datetime, timezone
+from email.utils import getaddresses
 import json
 import logging
 from pathlib import Path
@@ -30,9 +31,9 @@ def create_fixture(directory):
     def scenario():
         path = directory / 'scenario.json'
         return json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
-    def event(channel):
+    def event(channel, recipients=None):
         with (directory/'deliveries.jsonl').open('a',encoding='utf-8') as output:
-            output.write(json.dumps({'channel':channel})+'\n')
+            output.write(json.dumps({'channel':channel, **({'recipients':recipients} if recipients is not None else {})})+'\n')
     at = datetime(2026,9,25,2,tzinfo=timezone.utc)
     def transport(request):
         options = scenario()
@@ -66,7 +67,7 @@ def create_fixture(directory):
         def __exit__(self,*args): pass
         def starttls(self): pass
         def send_message(self,message):
-            event('email')
+            event('email', [address for _,address in getaddresses(message.get_all('To', []))])
             if scenario().get('email') == 'rejected':
                 raise smtplib.SMTPRecipientsRefused({'fixture@example.invalid':(550,b'rejected')})
             if scenario().get('email') == 'unknown':
@@ -79,7 +80,7 @@ def create_fixture(directory):
         database_path=str(directory/'reports.sqlite3'),github_api_base_url='https://github.invalid',lark_api_base_url='https://lark.invalid/open-apis',
         github_token=None,lark_app_id='synthetic-app',lark_app_secret='synthetic-secret',lark_webhook='https://hook.invalid/fixed',
         lark_task_search_path='/task/v2/tasklists/{tasklist_guid}/tasks',lark_message_path='/im/v1/messages',
-        lark_token_path='/auth/v3/tenant_access_token/internal',smtp=SmtpConfig('smtp.invalid',587,None,None,'fixture@example.invalid',['fixture@example.invalid']))
+        lark_token_path='/auth/v3/tenant_access_token/internal',smtp=SmtpConfig('smtp.invalid',587,None,None,'fixture@example.invalid',['fixture@example.invalid','mentor@example.invalid']))
     service=OperationService(config,OperationStore(directory/'reports.sqlite3.operations.sqlite3'),
         client_factory=lambda:httpx.Client(transport=httpx.MockTransport(transport)),smtp_factory=SMTP)
     app=create_app(directory/'reports.sqlite3',operations=service,operation_token=TOKEN,allowed_origins=('http://127.0.0.1:5174',))

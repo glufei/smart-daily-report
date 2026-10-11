@@ -211,9 +211,9 @@ def test_delivery_guard_is_inside_acceptance_transaction(tmp_path,status):
     from smart_daily_report.shared.operation_storage import OperationConflict
     store=new_store(tmp_path/'operations.sqlite3')
     sources={key:None for key in ('github_commits','lark_tasks','lark_messages')}
-    deliveries={'email':{'status':'pending','attempts':0,'error_code':None},'lark':{'status':'not_requested','attempts':0,'error_code':None}}
+    deliveries={'lark':{'status':'pending','attempts':0,'error_code':None},'email':{'status':'not_requested','attempts':0,'error_code':None}}
     first,_=store.accept(str(uuid4()),'delivery','2026-09-25','first','a'*64,sources,deliveries)
-    terminal={**deliveries,'email':{'status':status,'attempts':1,'error_code':None}}
+    terminal={**deliveries,'lark':{'status':status,'attempts':1,'error_code':None}}
     store.finish(first['operation_id'],status='succeeded',report_revision='a'*64,sources=sources,deliveries=terminal,error_code=None)
     before=store.path.read_bytes()
     with pytest.raises(OperationConflict,match='delivery_not_repeatable'):

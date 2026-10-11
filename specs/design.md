@@ -1,7 +1,8 @@
 # 智能日报生成器架构设计（Design）
 
-- 版本：v1.2（2026-10-01）
-- 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.2.0（2026-10-05），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见版本说明。
+- 版本：v1.3（2026-10-11）
+- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19–21开发、完整回归和独立审查修复完成，用户已授权PR#4合并main并发布v1.3.0。
+- 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.3.0（2026-10-11），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见 docs/frontend/v1.3-release.md。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已实现、真实业务验收通过）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
@@ -94,7 +95,25 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 - 现有机器人实现只检查旧 `StatusCode` 并默认缺失为 0；v1.2 按平台文档核对新 `code` 与旧字段，明确失败码、矛盾字段或缺失成功证据不能算成功。现有 SMTP 未处理 `send_message()` 返回的部分拒绝收件人，也列入 Task 17 的先失败测试。
 - 来源的成员/顶层重复状态仍沿用 §3 的顶层约定；不趁本轮清理无关模型。Notifier 的“不确定发送”安全语义优先于旧的笼统重试规则，只作相关最小修订并补 CLI 回归。
 
+### 1.6 下一轮操作反馈与邮件目标选择（已实现，完整回归及独立审查修复完成，交付流程为PR#4 → main → v1.3.0）
+
+上游为 proposal §8/N01–N06；决策见 [ADR-006](adrs/006-operation-feedback-email-selection.md)，具体字段及迁移见 [操作契约 §7](contracts/web-operations.md)。本节是已实现增量，§1.4 的固定目标和整邮件渠道重复限制保留为 v1.2 历史规则，实施后按本节明确替换，不同时应用两种规则。
+
+**前端反馈**：沿用 React 状态、现有 fetch/Zod 与请求票据，不增加 UI/状态依赖。查询、预览各自设置动作提示与按钮加载文案；提示放在按钮附近并以 aria-live/role=status 提供反馈，出错可用 role=alert。查询完成时间使用浏览器完成本次请求的本地时间（展示时区），与服务器 created_at/updated_at 和 report_date 分开；查询 null 清空操作记录并显示暂无记录。预览成功由 App 的正文标题 ref 完成焦点与滚动；通过 tabIndex=-1 支持程序焦点，尊重减少动画偏好。焦点移动仅由用户主动预览成功触发，恢复状态/轮询不抢焦点。旧 ticket、日期、Token 失效后不能更新动作反馈或移动焦点。
+
+主动查询/预览的 GET 采用已有历史查询的 10 秒等待上限，到期显示明确提示；操作轮询继续保留 120 秒上限，前端停止等待不代表后台取消。预览失败清除有效 controlPreview；若仍展示已加载只读历史，需明确预览未就绪，不能据其推送。
+
+**目标与确认**：认证后的 PreviewView.targets.email 增加配置邮箱列表。OperationPanel 保存本次选择，默认空；更新日期、预览或令牌时使确认失效并重置选择。确认捕获日期、版本、渠道及排序去重后的邮箱；没有邮件渠道时邮箱数组必须为空。需要发送邮件且没有选择时按钮禁用并显示原因。具体地址作为文本仅通过受保护接口与内存状态展示，不进入公共历史 GET、浏览器持久存储或日志。
+
+**接口与发送**：DeliveryRequest 增加 email_recipients；服务器验证配置白名单和严格非空/唯一约束，绝不使用缺省全量地址。规范化指纹包含该列表，SQLite 原子保存本次目标，后台执行只用接受记录中的快照。复用 send_email(report, selected_recipients, smtp_config)，所选地址作为一个列表提交 SMTP，保留已有聚合结果；不增加逐收件人账本，不修改 CLI 默认配置收件人发送方式或 Notifier 签名。
+
+**主动再次发送**：用户已确认解除邮件渠道的同版本跨请求阻断；accepted/partial_failure/unknown 只作为结果和重复风险提示，不再禁用新邮件请求。每次仍独立确认，unknown 要提示先核实原投递。SQLite 同键同指纹去重、不同指纹冲突、单活动槽、版本检查、重启中断及无自动重放保持。飞书继续按原渠道结果阻断同版本重复；邮件+已阻断飞书的组合请求整体拒绝，用户可取消飞书后仅发送邮件。
+
+**兼容与验证**：老操作 payload 缺少目标按 null 解读，不重写历史库、不推断旧邮箱；新邮件操作必须记录非空列表，新仅飞书操作为空列表，生成操作为 null。新旧前后端需配套启用；旧客户端提交邮件但缺 email_recipients 返回 400，不能静默全量发送。日报模型和 SQLite 日报表保持。复用现有 pytest/Vitest/React Testing Library/Playwright，Task19–21 按先失败后实现验证反馈、地址白名单、原键恢复及 CLI/只读回归。
+
 ## 2. 技术决策与 ADR
+
+ADR-006（规范及计划已确认，已实现且独立审查修复完成，交付流程为PR#4 → main → v1.3.0）：见 [`adrs/006-operation-feedback-email-selection.md`](adrs/006-operation-feedback-email-selection.md)，记录可选配置邮箱、邮件主动再次发送与请求去重的边界。
 
 ADR-005（v1.2 已确认）：见 [`adrs/005-superpowers-tdd.md`](adrs/005-superpowers-tdd.md)，明确 Superpowers 是开发流程工具、SDD 文档是真实需求来源；实施计划审查后执行严格 RED/GREEN/REFACTOR、审查和完成前验证。新增浏览器操作沿用 §1.4 的轻量方案。
 

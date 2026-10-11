@@ -165,3 +165,11 @@ members:
 - 消息成功响应必须实际含data/items列表；缺字段或列表类型错误返回invalid_payload，不能表示正常零记录。has_more出现时必须为布尔值；缺少has_more的既有兼容按page_token继续保留。任一后续页异常使整个消息来源失败且records为空。
 - GitHub提交详情与列表共用既有限流规则；详情按Link.next读取文件页，以filename去重，统计首个详情页的增删行。后页失败或重复链接整个来源失败，不保存部分文件数。官方接口最多公开3000个文件；达到该边界无法区分恰好3000与上游截断，保守返回details_file_limit，不声称完整计数。该限制不影响其他可用来源生成明确的partial_failure日报。
 - Markdown模板转义团队名、成员名、仓库/提交标题、任务标题/状态和消息正文的控制字符、实体与换行；链接先限制HTTP(S)，再编码Markdown目的地址分隔符。HTML沿用安全转义；原始成员记录保持不变。标题/列表/链接仅由模板生成，外部文本不作为新的格式命令。历史已保存日报不自动重写；预览及推送仍绑定原版本快照。
+
+## v1.3 目标选择适配（2026-10-11，已实现及回归通过）
+
+- 新操作字段与兼容性以 [web-operations §7](web-operations.md) 为准。既有 Collector/Generator、DailyReport、send_email/send_lark_message 的公共签名不变；CLI 仍调用配置全量邮箱，Web 发送仅传确认过的配置子集。
+- OperationStore.accept 增加可选目标快照参数，生成/旧调用默认 null，新邮件操作为非空列表，新仅飞书为 []；快照入 payload 和请求指纹，finish/record_delivery/recover_interrupted 保留该字段。旧 payload 缺字段按 null 投影，不初始化补造历史地址。
+- OperationService.accept_delivery 验证白名单和版本；execute 读取已持久目标，不重新取全部配置邮箱。HTTP DTO、前端 Zod 和测试 fixture 一起更新；配置外目标即时拒绝，不传到 Notifier。
+- Store 的同日报版本跨请求阻断只继续约束飞书；邮件允许用户独立确认新请求再次发送。请求键去重、全局活动槽、未知结果/重启恢复与无自动重发保持。邮件仍聚合为原 DeliveryResult，不增加逐收件人账本。
+- 原 v1.2 的固定全量邮件/整邮件渠道禁止主动再次发送为历史基线；本增量明确替换相应 Web 规则，不能同时执行冲突约束。Task19–21 已按 TDD 实现并通过回归；v1.3 前后端需配套升级。
