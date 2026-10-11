@@ -19,3 +19,14 @@
 ## 复现命令
 
 前端目录：`npm test -- --run src/App.operations.test.tsx -t 'query_feedback|preview_feedback|manual_query_and_preview_timeout|late_preview_after|automatic_preview_does_not_move_focus'`；全部单元 `npm test -- --run`；类型 `npm run typecheck`；浏览器 `npx playwright test --config playwright.operations.config.ts -g 'manual_preview_focus_and_feedback|query_feedback_and_readonly_requests'`。浏览器解释器按计划 DAILY_REPORT_PYTHON 配置，PYTHONPATH 指向隔离工作区 src，不加载私人 config.yaml/.env。
+
+
+## Task20
+
+- 服务器意图 RED：7 failed / 6 已有保护直接 passed，退出1；GREEN13 passed。覆盖单选精确 To、空/缺失/重复/非字符串/空格/换行/配置外/仅飞书带邮箱、两位选择规范化、原键变目标冲突、邮件新键允许而混合重复飞书拒绝、配置变化后的接受快照与旧记录只读。
+- 客户端 RED3 failed（缺 DTO/目标核对/历史默认值），GREEN3 passed；页面独立 RED8 failed（缺勾选和确认、邮件仍被旧规则禁用、缺历史目标说明），GREEN8 passed。先客户端后页面，避免 DTO 错误掩盖页面意图失败。
+- 浏览器替身目标证据 RED1 failed（缺第二位候选）；随后补充两位虚构邮箱及从 MIME To 记录实际目标，fixture3 passed。
+- 增加断线原请求显式重试目标不变、仅飞书邮箱数组为空、四种飞书阻断回归；这些既有保护直接通过，如实记为回归而非新 RED。
+- 完整相关测试：Python104 passed / 既有警告1，前端110 passed，typecheck退出0；均使用受控 HTTP/SMTP，零真实外部发送。
+- 裁决：旧邮件新键禁止重发与本轮已批准需求冲突，选择主动再次发送；旧测试保留为飞书阻断/原键未知或中断不得自动执行，未删除保护测试。公共 helper 明确勾选虚构地址，不把页面默认改回全选。没有按收件人去重账本。
+- 剩余：Task21完整浏览器/覆盖率/构建/文档/审查；真实选择性收件未授权、未验收。

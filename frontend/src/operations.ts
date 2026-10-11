@@ -13,14 +13,16 @@ export const operationSchema = z.strictObject({ operation_id: id, request_id: id
   report_date: z.iso.date(), status: z.enum(['running', 'succeeded', 'partial_failure', 'failed', 'skipped', 'unknown', 'interrupted']),
   created_at: z.iso.datetime({ offset: true }), updated_at: z.iso.datetime({ offset: true }), report_revision: revision.nullable(),
   sources, deliveries: z.strictObject({ email: delivery, lark: delivery }), error_code: errorCode,
+  email_recipients: z.array(z.string()).nullable().default(null),
 }).refine(value => Object.values(value.sources).every(source => value.kind === 'generation' ? source !== null : source === null));
 const target = z.strictObject({ enabled: z.boolean(), label: z.string(), previous: delivery.nullable() });
 export const previewSchema = z.strictObject({ report: reportSchema, report_revision: revision, sources: sources.nullable(),
-  targets: z.strictObject({ email: target, lark: target }) });
+  targets: z.strictObject({ email: target.extend({ recipients: z.array(z.string()) }), lark: target }) });
 export type OperationView = z.infer<typeof operationSchema>;
 export type PreviewView = z.infer<typeof previewSchema>;
 
 const messages: Record<string, string> = {
+  recipient_not_configured: '所选邮箱不在服务器配置中',
   invalid_request: '操作参数无效', invalid_report_date: '日期无效，请使用 YYYY-MM-DD',
   operation_unauthorized: '操作令牌无效或未提供', origin_not_allowed: '请求来源未允许',
   report_not_found: '该日期尚无日报', operation_not_found: '未找到该操作记录',
@@ -47,7 +49,7 @@ async function request<T>(path: string, token: string, signal: AbortSignal, sche
   if (response.status !== 200 && response.status !== 202) {
     const error = z.object({ error: z.object({ code: z.string() }) }).safeParse(data);
     const code = error.success ? error.data.error.code : 'invalid_response';
-    const allowed = response.status === 400 ? ['invalid_request', 'invalid_report_date', 'channel_not_configured', 'non_workday']
+    const allowed = response.status === 400 ? ['invalid_request', 'invalid_report_date', 'channel_not_configured', 'recipient_not_configured', 'non_workday']
       : response.status === 401 ? ['operation_unauthorized'] : response.status === 403 ? ['origin_not_allowed']
       : response.status === 404 ? ['report_not_found', 'operation_not_found']
       : response.status === 409 ? ['idempotency_conflict', 'operation_busy', 'report_revision_changed', 'delivery_not_repeatable']
@@ -74,7 +76,9 @@ export function getPreview(date: string, token: string, signal: AbortSignal) {
   return request(`reports/${encodeURIComponent(date)}/preview`, token, signal, previewSchema.refine(value => value.report.report_date === date));
 }
 
-export function deliverReport(date: string, revision: string, channels: ('email' | 'lark')[], token: string, requestId: string, signal: AbortSignal) {
+export function deliverReport(date: string, revision: string, channels: ('email' | 'lark')[], emailRecipients: string[], token: string, requestId: string, signal: AbortSignal) {
   return request('deliveries', token, signal, operationSchema.refine(value => value.kind === 'delivery' && value.report_date === date
-    && value.request_id === requestId && value.report_revision === revision), { report_date: date, report_revision: revision, channels }, requestId);
+    && value.request_id === requestId && value.report_revision === revision
+    && JSON.stringify(value.email_recipients) === JSON.stringify([...emailRecipients].sort())),
+    { report_date: date, report_revision: revision, channels, email_recipients: [...emailRecipients].sort() }, requestId);
 }

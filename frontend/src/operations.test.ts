@@ -83,11 +83,35 @@ test('malformed_error_body_and_mixed_delivery_source_evidence_are_invalid', asyn
 
 test('delivery_post_contains_only_confirmed_date_revision_channels_and_original_key', async () => {
   const client = await api(); expect(client.deliverReport, 'Confirmed delivery client is missing').toBeTypeOf('function');
-  const value = { ...operationFixture(), kind: 'delivery', report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
+  const value = { ...operationFixture(), kind: 'delivery', email_recipients: ['fixture@example.invalid'], report_revision: 'a'.repeat(64), sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
   const fetchMock = vi.fn().mockResolvedValue(response(value, 202)); vi.stubGlobal('fetch', fetchMock);
-  const result = await client.deliverReport('2026-09-25', 'a'.repeat(64), ['email','lark'], 'private-token', value.request_id, new AbortController().signal);
+  const result = await client.deliverReport('2026-09-25', 'a'.repeat(64), ['email','lark'], ['fixture@example.invalid'], 'private-token', value.request_id, new AbortController().signal);
   expect(result.kind).toBe('delivery'); expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(fetchMock.mock.calls[0][0]).toBe('http://127.0.0.1:8000/api/v1/deliveries');
-  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ report_date: '2026-09-25', report_revision: 'a'.repeat(64), channels: ['email','lark'] });
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ report_date: '2026-09-25', report_revision: 'a'.repeat(64), channels: ['email','lark'], email_recipients: ['fixture@example.invalid'] });
   expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer private-token');
+});
+
+
+test('email_selection_client_preserves_confirmed_recipient_and_rejects_mismatch', async () => {
+  const client = await api(); const signal = new AbortController().signal;
+  const value = { ...operationFixture('succeeded'), kind: 'delivery', email_recipients: ['mentor@example.com'],
+    sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response(value))); vi.stubGlobal('fetch', fetchMock);
+  expect((await client.deliverReport('2026-09-25', 'a'.repeat(64), ['email'], ['mentor@example.com'], 'token', value.request_id, signal)).email_recipients).toEqual(['mentor@example.com']);
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body).email_recipients).toEqual(['mentor@example.com']);
+  await expect(client.deliverReport('2026-09-25', 'a'.repeat(64), ['email'], ['member@example.com'], 'token', value.request_id, signal)).rejects.toThrow('操作响应格式异常');
+});
+
+test('email_selection_config_error_is_safe_and_preview_has_explicit_candidates', async () => {
+  const client = await api(); const preview = previewFixture();
+  const value = { ...preview, targets: { ...preview.targets, email: { ...preview.targets.email, recipients: ['mentor@example.com'] } } };
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(value)).mockResolvedValueOnce(response({ error: { code: 'recipient_not_configured', message: 'private-marker' } }, 400)); vi.stubGlobal('fetch', fetchMock);
+  expect((await client.getPreview('2026-09-25', 'token', new AbortController().signal)).targets.email.recipients).toEqual(['mentor@example.com']);
+  await expect(client.getCurrentOperation('token', new AbortController().signal)).rejects.toMatchObject({ code: 'recipient_not_configured', message: '所选邮箱不在服务器配置中' });
+});
+
+test('legacy_target_defaults_to_unknown_and_never_current_config', async () => {
+  const client = await api(); const value = { ...operationFixture('succeeded'), kind: 'delivery', sources: { github_commits: null, lark_tasks: null, lark_messages: null } };
+  expect(client.operationSchema.parse(value).email_recipients).toBeNull();
 });

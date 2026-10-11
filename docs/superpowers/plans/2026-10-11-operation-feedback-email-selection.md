@@ -96,7 +96,7 @@ expect(screen.getByText(/已加载 2026-09-25 日报预览/)).toBeVisible();
 - `OperationStore.accept(..., *, before_insert=None, email_recipients: list[str] | None = None) -> tuple[dict, bool]`；快照复制保存，其他方法保留目标；调用方不得在返回后修改接受记录所用目标。
 - `deliverReport(date: string, revision: string, channels: ('email'|'lark')[], emailRecipients: string[], token: string, requestId: string, signal: AbortSignal)` 返回原 Promise<OperationView>；PendingRequest 的 delivery 与 Confirmation 增加 emailRecipients 快照。固定同步码 recipient_not_configured，不加入异步 SafeErrorCode。
 
-- [ ] **20.1 写服务器失败测试**：先写测试而不修改 production DTO。复用 delivery_service/config、假 SMTP 的 sends 和 MockTransport 的 requests；该测试内配置两邮箱，生成/预览后清空请求计数。
+- [x] **20.1 写服务器失败测试**：先写测试而不修改 production DTO。复用 delivery_service/config、假 SMTP 的 sends 和 MockTransport 的 requests；该测试内配置两邮箱，生成/预览后清空请求计数。
 
 ```python
 def test_selected_email_recipient_is_the_only_smtp_target(config, tmp_path):
@@ -116,10 +116,10 @@ def test_selected_email_recipient_is_the_only_smtp_target(config, tmp_path):
 
 同循环添加：`test_email_selection_invalid_inputs_send_nothing`（缺失/空/重复/非字符串/空格/换行/配置外，以及仅飞书携带邮箱）、`test_selected_recipients_are_canonical_idempotency_content`、`test_email_new_key_can_resend_same_revision_but_lark_cannot`、`test_target_snapshot_and_replay_do_not_use_changed_config`、`test_legacy_operation_has_unknown_targets_without_database_rewrite`。通过 TestClient 断言 400 固定文案、GET 认证、零通知；SMTP 本轮仍一次提交选定列表。
 
-- [ ] **20.2 运行服务器 RED**（根目录）：`& $taskPython -m pytest --no-cov tests/unit/test_web_operations.py tests/unit/test_operation_storage.py tests/integration/test_web_operation_pipeline.py -k 'selected_email_recipient or email_selection or selected_recipients or email_new_key or target_snapshot or legacy_operation' -q`。预期选择/快照尚未实现的意图失败；使用现有导入，语法/工具错误需先修正，不算 RED。
-- [ ] **20.3 实现服务器契约与最小调用**：按 Interfaces 新增字段和验证。指纹包含 sorted email_recipients；accept 的 before_insert 验证白名单、版本，事务持久捕获选择；后台 send_email 只传 record 中列表，缺有效快照保守不发送。Store 的跨请求重复检查仅选 lark，所有同键与活动槽规则保持。旧 payload 缺字段由响应模型默认 null 解读，不改库；预览 recipients 配置顺序去重，不输出凭证。
-- [ ] **20.4 服务器 GREEN 与旧约束裁决**：重跑 20.2；完整运行上述三个测试文件。更新旧 DeliveryRequest/HTTP helper 明确传虚构配置邮箱；将旧“邮件新键禁止重复”断言替换为已确认新行为，保留飞书、旧键、中断、未知无自动执行、版本与零采集断言，不能删除测试来凑通过。CLI/Notifier 既有测试保持原意。
-- [ ] **20.5 写前端失败测试**：operations.test.ts 验证严格新 DTO、配置外错误文案、POST 日期/版本/渠道/邮箱和原键；App.operations.test.tsx 验证初始所有邮箱未选、空选择禁用原因、只选导师确认地址、取消零 POST、仅飞书空数组、旧目标 null 说明、accepted/unknown 邮件仍能独立确认新请求且风险可见。
+- [x] **20.2 运行服务器 RED**（根目录）：`& $taskPython -m pytest --no-cov tests/unit/test_web_operations.py tests/unit/test_operation_storage.py tests/integration/test_web_operation_pipeline.py -k 'selected_email_recipient or email_selection or selected_recipients or email_new_key or target_snapshot or legacy_operation' -q`。预期选择/快照尚未实现的意图失败；使用现有导入，语法/工具错误需先修正，不算 RED。
+- [x] **20.3 实现服务器契约与最小调用**：按 Interfaces 新增字段和验证。指纹包含 sorted email_recipients；accept 的 before_insert 验证白名单、版本，事务持久捕获选择；后台 send_email 只传 record 中列表，缺有效快照保守不发送。Store 的跨请求重复检查仅选 lark，所有同键与活动槽规则保持。旧 payload 缺字段由响应模型默认 null 解读，不改库；预览 recipients 配置顺序去重，不输出凭证。
+- [x] **20.4 服务器 GREEN 与旧约束裁决**：重跑 20.2；完整运行上述三个测试文件。更新旧 DeliveryRequest/HTTP helper 明确传虚构配置邮箱；将旧“邮件新键禁止重复”断言替换为已确认新行为，保留飞书、旧键、中断、未知无自动执行、版本与零采集断言，不能删除测试来凑通过。CLI/Notifier 既有测试保持原意。
+- [x] **20.5 写前端失败测试**：operations.test.ts 验证严格新 DTO、配置外错误文案、POST 日期/版本/渠道/邮箱和原键；App.operations.test.tsx 验证初始所有邮箱未选、空选择禁用原因、只选导师确认地址、取消零 POST、仅飞书空数组、旧目标 null 说明、accepted/unknown 邮件仍能独立确认新请求且风险可见。
 
 ```ts
 // email_selection_requires_explicit_recipient_and_confirmation
@@ -134,9 +134,9 @@ expect(JSON.parse(deliveryCall[1].body as string).email_recipients).toEqual(['me
 
 添加 `lost_delivery_response_keeps_confirmed_recipient_snapshot`（原 POST 失败后 by-key GET，不自动重发；显式原键重试保持邮箱）、`mixed_repeatable_email_and_blocked_lark_never_sends`、`changing_date_token_or_preview_invalidates_recipient_confirmation`。
 
-- [ ] **20.6 前端 RED**（前端目录）：`npm test -- --run src/operations.test.ts src/App.operations.test.tsx -t 'email_selection|confirmed_recipient|repeatable_email|recipient_confirmation|legacy_target'`。观察因为缺字段/选择/确认快照的行为失败；现有防竞态/无自动重发直接通过的项目如实记录。
-- [ ] **20.7 最小前端实现**：Zod 的 OperationView 增加 nullable 目标默认 null，预览邮件要求 recipients；客户端 POST 增加规范化选择，返回目标须与确认一致。OperationPanel 默认邮箱选择 []，邮件与飞书可独立勾选；email 不按 previous 阻断，新确认列具体目标及重复风险，lark 仍按原 blocked。未确认 POST 仍只能查原键，不能启用新发送；新结果显示此次目标，历史 null 明确未记录。旧 outcomeText 中“不能整渠道重发”改为描述实际部分受理/未知及核实建议，相关飞书错误文案保留约束。
-- [ ] **20.8 GREEN/集成 checkpoint**：运行 `npm test -- --run src/operations.test.ts src/App.operations.test.tsx`、`npm run typecheck` 与 20.4 Python 文件，预期退出 0。前后端 fixtures 配套：e2e 配置增第二个虚构邮箱，旧需要邮件的流程显式勾选，不把默认改回全量；增量事件记录 To 地址用于 Task21，Notifier 实现不改。记录旧规则变更与未完成真实验收；提交 `feat: select configured email recipients for confirmed delivery`。
+- [x] **20.6 前端 RED**（前端目录）：`npm test -- --run src/operations.test.ts src/App.operations.test.tsx -t 'email_selection|confirmed_recipient|repeatable_email|recipient_confirmation|legacy_target'`。观察因为缺字段/选择/确认快照的行为失败；现有防竞态/无自动重发直接通过的项目如实记录。
+- [x] **20.7 最小前端实现**：Zod 的 OperationView 增加 nullable 目标默认 null，预览邮件要求 recipients；客户端 POST 增加规范化选择，返回目标须与确认一致。OperationPanel 默认邮箱选择 []，邮件与飞书可独立勾选；email 不按 previous 阻断，新确认列具体目标及重复风险，lark 仍按原 blocked。未确认 POST 仍只能查原键，不能启用新发送；新结果显示此次目标，历史 null 明确未记录。旧 outcomeText 中“不能整渠道重发”改为描述实际部分受理/未知及核实建议，相关飞书错误文案保留约束。
+- [x] **20.8 GREEN/集成 checkpoint**：运行 `npm test -- --run src/operations.test.ts src/App.operations.test.tsx`、`npm run typecheck` 与 20.4 Python 文件，预期退出 0。前后端 fixtures 配套：e2e 配置增第二个虚构邮箱，旧需要邮件的流程显式勾选，不把默认改回全量；增量事件记录 To 地址用于 Task21，Notifier 实现不改。记录旧规则变更与未完成真实验收；提交 `feat: select configured email recipients for confirmed delivery`。
 
 ## Task 21：浏览器完整回归与交付（N01–N06，依赖 Task19–20）
 

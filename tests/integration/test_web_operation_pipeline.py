@@ -389,7 +389,7 @@ def test_preview_revision_changed_rejects_before_notifier(config,tmp_path):
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
     report=get_report(Path(cfg.database_path),date(2026,9,25)); write_report(Path(cfg.database_path),replace(report,html=report.html+'updated'))
     with TestClient(create_app(Path(cfg.database_path),operations=service,operation_token='t'*32),base_url='http://127.0.0.1') as client:
-        response=client.post('/api/v1/deliveries',json={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['email','lark']},
+        response=client.post('/api/v1/deliveries',json={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['email','lark'],'email_recipients':['lead@test']},
           headers={'Authorization':'Bearer '+('t'*32),'Idempotency-Key':str(uuid4())})
     assert response.status_code==409 and response.json()['error']['code']=='report_revision_changed'
     assert requests==[] and sends==[]
@@ -400,7 +400,7 @@ def test_delivery_acceptance_keeps_snapshot_and_never_recollects(config,tmp_path
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
     accept=getattr(service,'accept_delivery',None)
     assert accept is not None, 'Confirmed snapshot delivery acceptance is missing'
-    accepted=accept(DeliveryRequest(report_date=date(2026,9,25),report_revision=preview.report_revision,channels=['lark','email']),str(uuid4()))
+    accepted=accept(DeliveryRequest(report_date=date(2026,9,25),report_revision=preview.report_revision,channels=['lark','email'],email_recipients=['lead@test']),str(uuid4()))
     assert accepted.is_new and accepted.snapshot is not None and accepted.view.kind=='delivery'
     assert accepted.view.sources.model_dump()=={'github_commits':None,'lark_tasks':None,'lark_messages':None}
     assert all(item['status']=='pending' for item in accepted.view.deliveries.model_dump().values())
@@ -417,7 +417,7 @@ def accept_delivery(service,preview,key=None,channels=None):
     accept=getattr(service,'accept_delivery',None)
     assert accept is not None, 'Confirmed delivery is missing'
     return accept(DeliveryRequest(report_date=date.fromisoformat(preview.report.report_date.isoformat()),report_revision=preview.report_revision,
-      channels=channels or ['email','lark']),key or str(uuid4()))
+      channels=channels or ['email','lark'],email_recipients=list(service.config.smtp.recipients) if 'email' in (channels or ['email','lark']) else []),key or str(uuid4()))
 
 
 def test_same_key_completed_delivery_replays_even_after_new_report(config,tmp_path):
@@ -462,11 +462,11 @@ def test_channel_error_never_blocks_other_selected_channel(config,tmp_path,email
     assert len(sends)==1 and len(requests)==1
 
 
-def test_accepted_channel_cannot_repeat(config,tmp_path):
+def test_accepted_lark_channel_cannot_repeat(config,tmp_path):
     from smart_daily_report.shared.operation_storage import OperationConflict
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
     accepted=accept_delivery(service,preview); service.execute(accepted.view.operation_id,accepted.snapshot)
-    with pytest.raises(OperationConflict,match='delivery_not_repeatable'): accept_delivery(service,preview,channels=['email'])
+    with pytest.raises(OperationConflict,match='delivery_not_repeatable'): accept_delivery(service,preview,channels=['lark'])
     assert len(sends)==1 and len(requests)==1
 
 
@@ -480,12 +480,12 @@ def test_failure_to_persist_pending_state_sends_nothing(config,tmp_path,monkeypa
     monkeypatch.setattr(store,'accept',fail)
     with TestClient(create_app(Path(cfg.database_path),operations=service,operation_token='t'*32),base_url='http://127.0.0.1') as client:
         response=client.post('/api/v1/deliveries',headers={'Authorization':'Bearer '+('t'*32),'Idempotency-Key':str(uuid4())},
-          json={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['email']})
+          json={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['email'],'email_recipients':['lead@test']})
     assert response.status_code==500 and response.json()['error']['code']=='operation_storage_failed'
     assert requests==[] and sends==[] and 'private-marker' not in response.text
 
 
-def test_failure_to_persist_post_send_result_never_allows_resend(config,tmp_path,monkeypatch):
+def test_failure_to_persist_post_send_result_never_automatically_resends(config,tmp_path,monkeypatch):
     import sqlite3
     from smart_daily_report.shared.operation_storage import OperationConflict
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
@@ -497,7 +497,9 @@ def test_failure_to_persist_post_send_result_never_allows_resend(config,tmp_path
     assert len(sends)==1 and requests==[]
     store.recover_interrupted(); record=store.get(accepted.view.operation_id)
     assert record['status']=='interrupted' and record['deliveries']['email']['status']=='unknown'
-    with pytest.raises(OperationConflict,match='delivery_not_repeatable'): accept_delivery(service,preview,channels=['email'])
+    service.execute(accepted.view.operation_id,accepted.snapshot)
+    replay=accept_delivery(service,preview,key=accepted.view.request_id,channels=['email'])
+    assert not replay.is_new and replay.view.status=='interrupted'
     assert len(sends)==1
 
 
@@ -507,7 +509,7 @@ def test_non_workday_and_disabled_channel_are_rejected_before_call(config,tmp_pa
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
     accept=getattr(service,'accept_delivery',None); assert accept is not None
     with pytest.raises(OperationError,match='non_workday'):
-        accept(DeliveryRequest(report_date=date(2026,9,26),report_revision=preview.report_revision,channels=['email']),str(uuid4()))
+        accept(DeliveryRequest(report_date=date(2026,9,26),report_revision=preview.report_revision,channels=['email'],email_recipients=['lead@test']),str(uuid4()))
     service.config=replace(service.config,lark_webhook=None)
     with pytest.raises(OperationError,match='channel_not_configured'): accept_delivery(service,preview,channels=['lark'])
     assert requests==[] and sends==[]
@@ -566,7 +568,7 @@ def test_delivery_http_replay_channel_order_and_duplicate_rejection(config,tmp_p
     from smart_daily_report.web.app import create_app
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
     key=str(uuid4()); headers={'Authorization':'Bearer '+('t'*32),'Idempotency-Key':key,'Origin':'http://127.0.0.1:5173'}
-    body={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['lark','email']}
+    body={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['lark','email'],'email_recipients':['lead@test']}
     with TestClient(create_app(Path(cfg.database_path),operations=service,operation_token='t'*32),base_url='http://127.0.0.1') as client:
         first=client.post('/api/v1/deliveries',headers=headers,json=body)
         assert first.status_code==202 and first.json()['status']=='running'
@@ -577,9 +579,9 @@ def test_delivery_http_replay_channel_order_and_duplicate_rejection(config,tmp_p
         assert evidence['targets']['lark']['previous']['status']=='accepted'
         report=get_report(Path(cfg.database_path),date(2026,9,25)); write_report(Path(cfg.database_path),replace(report,html='updated CLI content'))
         before=store.path.read_bytes()
-        replay=client.post('/api/v1/deliveries',headers=headers,json={**body,'channels':['email','lark']})
+        replay=client.post('/api/v1/deliveries',headers=headers,json={**body,'channels':['email','lark'],'email_recipients':['lead@test']})
         assert replay.status_code==200 and replay.json()==completed.json()
-        conflict=client.post('/api/v1/deliveries',headers=headers,json={**body,'channels':['email']})
+        conflict=client.post('/api/v1/deliveries',headers=headers,json={**body,'channels':['email'],'email_recipients':['lead@test']})
         assert conflict.status_code==409 and conflict.json()['error']['code']=='idempotency_conflict'
         for change in ({'channels':['email','email']},{'recipient':'unauthorized@test'},{'report_date':'20260925'}):
             rejected=client.post('/api/v1/deliveries',headers=headers,json={**body,**change})
@@ -588,14 +590,16 @@ def test_delivery_http_replay_channel_order_and_duplicate_rejection(config,tmp_p
     assert len(sends)==1 and len(requests)==1
 
 
-def test_notifier_without_explicit_outcome_is_unknown_and_cannot_repeat(config,tmp_path,monkeypatch):
+def test_notifier_without_explicit_outcome_is_unknown_and_never_automatically_repeats(config,tmp_path,monkeypatch):
     from smart_daily_report.shared.models import DeliveryResult
     from smart_daily_report.shared.operation_storage import OperationConflict
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
     monkeypatch.setattr('smart_daily_report.web.operations.send_email',lambda *args,**kwargs:DeliveryResult(True,1))
     accepted=accept_delivery(service,preview,channels=['email']); service.execute(accepted.view.operation_id,accepted.snapshot)
     assert store.get(accepted.view.operation_id)['status']=='unknown'
-    with pytest.raises(OperationConflict,match='delivery_not_repeatable'): accept_delivery(service,preview,channels=['email'])
+    replay=accept_delivery(service,preview,key=accepted.view.request_id,channels=['email'])
+    assert not replay.is_new and replay.view.status=='unknown'
+    assert sends==[]
 
 
 def test_delivery_without_in_memory_snapshot_never_loads_new_report_or_sends(config,tmp_path):
@@ -637,3 +641,87 @@ def test_malformed_only_message_source_preserves_saved_report(config, tmp_path, 
     assert result['report_revision'] is None
     assert Path(cfg.database_path).read_bytes() == before
     assert get_report(Path(cfg.database_path), report_date) == original
+
+
+# Selection protects unintended recipients; all transports here are synthetic.
+def selected_body(preview, recipients, channels=None):
+    from smart_daily_report.web.operation_schemas import DeliveryRequest
+    return DeliveryRequest(report_date=preview.report.report_date, report_revision=preview.report_revision,
+                           channels=channels or ['email'], email_recipients=recipients)
+
+
+def test_selected_email_recipient_is_the_only_smtp_target(config, tmp_path):
+    from email.utils import getaddresses
+    config=replace(config,smtp=replace(config.smtp,recipients=['member@example.com','mentor@example.com']))
+    service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
+    accepted=service.accept_delivery(selected_body(preview,['mentor@example.com']),str(uuid4()))
+    service.execute(accepted.view.operation_id,accepted.snapshot)
+    assert [address for _,address in getaddresses(sends[0].get_all('To'))]==['mentor@example.com']
+    assert store.get(accepted.view.operation_id)['email_recipients']==['mentor@example.com']
+    assert requests==[] and len(sends)==1
+    assert preview.targets.email.recipients==['member@example.com','mentor@example.com']
+
+
+@pytest.mark.parametrize('changes', [
+    {}, {'email_recipients': []}, {'email_recipients': ['lead@test','lead@test']},
+    {'email_recipients': [42]}, {'email_recipients': [' lead@test']},
+    {'email_recipients': ['lead@test\nBcc:attacker@test']},
+    {'email_recipients': ['attacker@test']},
+    {'channels': ['lark'], 'email_recipients': ['lead@test']},
+])
+def test_email_selection_invalid_inputs_send_nothing(config,tmp_path,changes):
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    from smart_daily_report.web.app import create_app
+    service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
+    before=store.path.read_bytes()
+    body={'report_date':'2026-09-25','report_revision':preview.report_revision,'channels':['email'],**changes}
+    with TestClient(create_app(Path(cfg.database_path),operations=service,operation_token='t'*32),base_url='http://127.0.0.1') as client:
+        response=client.post('/api/v1/deliveries',json=body,headers={'Authorization':'Bearer '+('t'*32),'Idempotency-Key':str(uuid4())})
+    assert response.status_code==400
+    expected='recipient_not_configured' if changes.get('email_recipients')==['attacker@test'] else 'invalid_request'
+    assert response.json()['error']['code']==expected
+    assert 'attacker@test' not in response.text
+    assert requests==[] and sends==[] and store.path.read_bytes()==before
+
+
+def test_selected_recipients_are_canonical_idempotency_content(config,tmp_path):
+    from smart_daily_report.shared.operation_storage import OperationConflict
+    config=replace(config,smtp=replace(config.smtp,recipients=['member@example.com','mentor@example.com']))
+    service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
+    key=str(uuid4())
+    first=service.accept_delivery(selected_body(preview,['mentor@example.com','member@example.com']),key)
+    service.execute(first.view.operation_id,first.snapshot)
+    replay=service.accept_delivery(selected_body(preview,['member@example.com','mentor@example.com']),key)
+    assert not replay.is_new and replay.view.operation_id==first.view.operation_id
+    with pytest.raises(OperationConflict,match='idempotency_conflict'):
+        service.accept_delivery(selected_body(preview,['mentor@example.com']),key)
+    assert len(sends)==1 and requests==[]
+    assert sends[0]['To']=='member@example.com, mentor@example.com'
+
+
+def test_email_new_key_can_resend_same_revision_but_lark_cannot(config,tmp_path):
+    from smart_daily_report.shared.operation_storage import OperationConflict
+    service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
+    first=service.accept_delivery(selected_body(preview,['lead@test'],['email','lark']),str(uuid4()))
+    service.execute(first.view.operation_id,first.snapshot)
+    with pytest.raises(OperationConflict,match='delivery_not_repeatable'):
+        service.accept_delivery(selected_body(preview,['lead@test'],['email','lark']),str(uuid4()))
+    assert len(sends)==1 and len(requests)==1
+    second=service.accept_delivery(selected_body(preview,['lead@test']),str(uuid4()))
+    service.execute(second.view.operation_id,second.snapshot)
+    assert len(sends)==2 and len(requests)==1 and second.view.operation_id!=first.view.operation_id
+
+
+def test_target_snapshot_and_replay_do_not_use_changed_config(config,tmp_path):
+    config=replace(config,smtp=replace(config.smtp,recipients=['member@example.com','mentor@example.com','member@example.com']))
+    service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)
+    assert preview.targets.email.recipients==['member@example.com','mentor@example.com']
+    key=str(uuid4())
+    first=service.accept_delivery(selected_body(preview,['mentor@example.com']),key)
+    service.config=replace(service.config,smtp=replace(service.config.smtp,recipients=['other@example.com']))
+    service.execute(first.view.operation_id,first.snapshot)
+    assert sends[0]['To']=='mentor@example.com'
+    replay=service.accept_delivery(selected_body(preview,['mentor@example.com']),key)
+    assert not replay.is_new and replay.view.email_recipients==['mentor@example.com']
+    assert len(sends)==1

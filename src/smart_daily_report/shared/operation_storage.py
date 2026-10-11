@@ -30,7 +30,8 @@ class OperationStore:
 
     def accept(self, request_id: str, kind: str, report_date: str,
                request_fingerprint: str, report_revision: str | None,
-               sources: dict, deliveries: dict, *, before_insert: Callable[[], None] | None = None) -> tuple[dict, bool]:
+               sources: dict, deliveries: dict, *, before_insert: Callable[[], None] | None = None,
+               email_recipients: list[str] | None = None) -> tuple[dict, bool]:
         with closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute("SELECT payload, request_fingerprint FROM operations WHERE request_id=?", (request_id,)).fetchone()
@@ -43,7 +44,7 @@ class OperationStore:
             if before_insert is not None:
                 before_insert()
             if kind == "delivery":
-                selected = [name for name, outcome in deliveries.items() if outcome["status"] == "pending"]
+                selected = [name for name, outcome in deliveries.items() if name == "lark" and outcome["status"] == "pending"]
                 for row in connection.execute("SELECT payload FROM operations").fetchall():
                     prior = json.loads(row[0])
                     if prior["report_date"] == report_date and prior["report_revision"] == report_revision:
@@ -54,7 +55,8 @@ class OperationStore:
                       "kind": kind, "report_date": report_date, "status": "running",
                       "created_at": now, "updated_at": now,
                       "report_revision": report_revision, "sources": sources,
-                      "deliveries": deliveries, "error_code": None}
+                      "deliveries": deliveries, "error_code": None,
+                      "email_recipients": list(email_recipients) if email_recipients is not None else None}
             connection.execute("INSERT INTO operations VALUES (?,?,?,?,?,?)",
                                (record["operation_id"], request_id, request_fingerprint,
                                 "running", now, json.dumps(record)))

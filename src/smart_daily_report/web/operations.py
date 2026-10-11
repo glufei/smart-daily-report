@@ -90,6 +90,8 @@ class OperationService:
             enabled = {"email": bool(self.config.smtp.host), "lark": bool(self.config.lark_webhook)}
             if any(not enabled[name] for name in body.channels):
                 raise OperationError(400, "channel_not_configured")
+            if any(address not in self.config.smtp.recipients for address in body.email_recipients):
+                raise OperationError(400, "recipient_not_configured")
             snapshot, _ = self._read_report(body.report_date)
             if report_revision(snapshot) != body.report_revision:
                 raise OperationError(409, "report_revision_changed")
@@ -98,7 +100,8 @@ class OperationService:
         deliveries = {name: {"status": "pending" if name in body.channels else "not_requested", "attempts": 0, "error_code": None}
                       for name in ("email", "lark")}
         record, is_new = self.store.accept(request_id, "delivery", body.report_date.isoformat(), fingerprint,
-                                          body.report_revision, sources, deliveries, before_insert=prepare)
+                                          body.report_revision, sources, deliveries, before_insert=prepare,
+                                          email_recipients=body.email_recipients)
         return AcceptedOperation(OperationView.model_validate_json(json.dumps(record)), is_new, snapshot)
 
 
@@ -149,7 +152,9 @@ class OperationService:
                             if snapshot is None:
                                 raise ValueError("Confirmed snapshot is missing")
                             if channel == "email":
-                                result = send_email(snapshot, self.config.smtp.recipients, self.config.smtp,
+                                if not record.get("email_recipients"):
+                                    raise ValueError("Confirmed recipients are missing")
+                                result = send_email(snapshot, record["email_recipients"], self.config.smtp,
                                                     **({"smtp_factory": self.smtp_factory} if self.smtp_factory else {}))
                             else:
                                 result = send_lark_message(snapshot, self.config.lark_webhook, client=client)
@@ -206,9 +211,11 @@ class OperationService:
         report, view = self._read_report(report_date)
         revision = report_revision(report)
         sources, previous = self.store.preview_metadata(report_date.isoformat(), revision)
+        recipients = list(dict.fromkeys(self.config.smtp.recipients)) if self.config.smtp.host else []
         targets = {
-            "email": {"enabled": bool(self.config.smtp.host),
-                      "label": f"邮件（{len(self.config.smtp.recipients)} 位收件人）" if self.config.smtp.host else "邮件未启用",
+            "email": {"enabled": bool(self.config.smtp.host and recipients),
+                      "label": f"邮件（{len(recipients)} 位可选收件人）" if self.config.smtp.host else "邮件未启用",
+                      "recipients": recipients,
                       "previous": previous["email"]},
             "lark": {"enabled": bool(self.config.lark_webhook),
                      "label": "配置的日报群" if self.config.lark_webhook else "飞书未启用",

@@ -17,6 +17,7 @@ MESSAGES = {
     "report_revision_changed": "日报已更新，请重新预览后推送",
     "delivery_not_repeatable": "该渠道已接受或结果待核实，不能重复推送",
     "invalid_request": "操作参数无效",
+    "recipient_not_configured": "所选邮箱不在服务器配置中",
     "invalid_report_date": "日期无效，请使用 YYYY-MM-DD",
     "report_not_found": "该日期尚无日报",
     "operation_not_found": "未找到该操作记录",

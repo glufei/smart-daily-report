@@ -35,7 +35,7 @@ def test_fixture_uses_real_pipeline_and_counts_only_external_delivery(tmp_path):
         assert 'sensitive-message-marker' not in json.dumps(preview)
         assert module.delivery_counts(tmp_path) == {'email':0,'lark':0}
         headers['Idempotency-Key'] = str(uuid4())
-        result = client.post('/api/v1/deliveries', headers=headers, json={'report_date':'2026-09-25','report_revision':preview['report_revision'],'channels':['email','lark']})
+        result = client.post('/api/v1/deliveries', headers=headers, json={'report_date':'2026-09-25','report_revision':preview['report_revision'],'channels':['email','lark'],'email_recipients':['fixture@example.invalid']})
         assert result.status_code == 202
         assert module.delivery_counts(tmp_path) == {'email':1,'lark':1}
         assert client.get('/api/v1/operations/current', headers=headers).json()['status'] == 'succeeded'
@@ -51,9 +51,24 @@ def test_fixture_failure_scenarios_are_external_boundaries_not_fake_api_routes(t
         client.post('/api/v1/generations', headers=headers, json={'report_date':'2026-09-25'})
         preview=client.get('/api/v1/reports/2026-09-25/preview', headers=headers).json()
         headers['Idempotency-Key']=str(uuid4())
-        client.post('/api/v1/deliveries', headers=headers,json={'report_date':'2026-09-25','report_revision':preview['report_revision'],'channels':['email','lark']})
+        client.post('/api/v1/deliveries', headers=headers,json={'report_date':'2026-09-25','report_revision':preview['report_revision'],'channels':['email','lark'],'email_recipients':['fixture@example.invalid']})
         current=client.get('/api/v1/operations/current',headers=headers).json()
         assert current['status']=='unknown'
         assert current['deliveries']['email']['status']=='rejected'
         assert current['deliveries']['lark']['status']=='unknown'
         assert module.delivery_counts(tmp_path)=={'email':1,'lark':1}
+
+
+def test_fixture_records_only_synthetic_selected_email_targets(tmp_path):
+    from smart_daily_report.web.operation_schemas import DeliveryRequest
+    from datetime import date
+    module=load_fixture(); app,service=module.create_fixture(tmp_path)
+    generated=service.accept_generation(GenerationRequest(report_date=date(2026,9,25)),str(uuid4()))
+    service.execute(generated.view.operation_id)
+    preview=service.preview(date(2026,9,25))
+    assert preview.targets.email.recipients==['fixture@example.invalid','mentor@example.invalid']
+    accepted=service.accept_delivery(DeliveryRequest(report_date=date(2026,9,25),report_revision=preview.report_revision,
+        channels=['email'],email_recipients=['mentor@example.invalid']),str(uuid4()))
+    service.execute(accepted.view.operation_id,accepted.snapshot)
+    events=[json.loads(line) for line in (tmp_path/'deliveries.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert events==[{'channel':'email','recipients':['mentor@example.invalid']}]
