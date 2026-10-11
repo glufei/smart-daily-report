@@ -616,6 +616,156 @@ test('preview_feedback_loading_before_response', async () => {
   expect(screen.getByRole('button', { name: '正在加载日报预览…' })).toBeDisabled();
 });
 
+test('authentication_timeout_releases_busy_state_and_allows_reverification', async () => {
+  vi.useFakeTimers();
+  vi.stubEnv('VITE_API_MODE', 'operations');
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+  render(<App />);
+  fireEvent.change(screen.getByLabelText('报告日期'), { target: { value: '2026-09-25' } });
+  fireEvent.change(screen.getByLabelText('操作令牌'), { target: { value: 'private-token' } });
+  fireEvent.click(screen.getByRole('button', { name: '验证令牌' }));
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(screen.getByText(/验证请求超时/)).toBeVisible();
+  expect(screen.getByRole('button', { name: '验证令牌' })).toBeEnabled();
+});
+
+test('hanging_generation_post_preserves_key_and_allows_status_query_without_resubmission', async () => {
+  vi.useFakeTimers();
+  let requestKey = '';
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(null));
+    if (options.method === 'POST') {
+      requestKey = (options.headers as Record<string, string>)['Idempotency-Key'];
+      return new Promise<Response>(() => {});
+    }
+    if (url.includes('/by-key/')) return Promise.resolve(response({ ...operationFixture('succeeded'), request_id: requestKey }));
+    return Promise.resolve(response(previewFixture()));
+  });
+  setup(fetchMock);
+  await act(async () => {});
+  generate();
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(screen.getByText(/执行结果未知.*不会自动重发/)).toBeVisible();
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await act(async () => {});
+  expect(screen.getByRole('heading', { name: '示例研发团队' })).toBeVisible();
+  expect(fetchMock.mock.calls.filter(call => call[1].method === 'POST')).toHaveLength(1);
+  expect(fetchMock.mock.calls.some(call => String(call[0]).includes(`/by-key/${requestKey}`))).toBe(true);
+});
+
+test('late_timed_out_post_completion_cannot_unlock_or_clear_timeout_of_explicit_retry', async () => {
+  vi.useFakeTimers();
+  let resolveFirst!: (value: Response) => void;
+  let postCount = 0;
+  let firstRequestKey = '';
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(null));
+    if (options.method === 'POST') {
+      postCount++;
+      if (postCount === 1) {
+        firstRequestKey = (options.headers as Record<string, string>)['Idempotency-Key'];
+        return new Promise<Response>(resolve => { resolveFirst = resolve; });
+      }
+      return new Promise<Response>(() => {});
+    }
+    if (url.includes('/by-key/')) return Promise.resolve(response({ error: { code: 'operation_not_found' } }, 404));
+    return Promise.resolve(response(null));
+  });
+  setup(fetchMock);
+  await act(async () => {});
+  generate();
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  await act(async () => {});
+  expect(screen.getByRole('button', { name: '重试原请求' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '重试原请求' }));
+  expect(postCount).toBe(2);
+  const retryTimerCount = vi.getTimerCount();
+  expect(screen.queryByText(/执行结果未知.*不会自动重发/)).not.toBeInTheDocument();
+  await act(async () => resolveFirst(response({ ...operationFixture('succeeded'), request_id: firstRequestKey })));
+  expect(vi.getTimerCount()).toBe(retryTimerCount);
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeDisabled();
+  await act(() => vi.advanceTimersByTimeAsync(9999));
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeDisabled();
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(screen.getByText(/执行结果未知.*不会自动重发/)).toBeVisible();
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeEnabled();
+  expect(postCount).toBe(2);
+});
+
+test('late_automatic_preview_cannot_clear_timer_of_new_manual_preview', async () => {
+  vi.useFakeTimers();
+  let resolveOldPreview!: (value: Response) => void;
+  let requestKey = '';
+  let previewCount = 0;
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(null));
+    if (options.method === 'POST') {
+      requestKey = (options.headers as Record<string, string>)['Idempotency-Key'];
+      return Promise.resolve(response({ ...operationFixture('succeeded'), request_id: requestKey }));
+    }
+    if (url.includes('/preview')) {
+      previewCount++;
+      if (previewCount === 1) return new Promise<Response>(resolve => { resolveOldPreview = resolve; });
+      return new Promise<Response>(() => {});
+    }
+    return Promise.resolve(response(null));
+  });
+  setup(fetchMock);
+  await act(async () => {});
+  generate();
+  await act(async () => {});
+  expect(previewCount).toBe(1);
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(screen.getByText(/日报预览请求超时/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '预览日报' }));
+  expect(screen.getByRole('button', { name: '正在加载日报预览…' })).toBeDisabled();
+  await act(async () => resolveOldPreview(response(previewFixture())));
+  await act(() => vi.advanceTimersByTimeAsync(9999));
+  expect(screen.getByRole('button', { name: '正在加载日报预览…' })).toBeDisabled();
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(screen.getByText('请求超时，请重新预览日报。')).toBeVisible();
+  expect(screen.getByRole('button', { name: '预览日报' })).toBeEnabled();
+  expect(previewCount).toBe(2);
+});
+
+test('timed_out_post_can_be_explicitly_retried_only_after_original_key_is_not_found', async () => {
+  vi.useFakeTimers();
+  const postedKeys: string[] = [];
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(null));
+    if (url.includes('/by-key/')) return Promise.resolve(response({ error: { code: 'operation_not_found' } }, 404));
+    if (options.method === 'POST') {
+      const key = (options.headers as Record<string, string>)['Idempotency-Key']; postedKeys.push(key);
+      return postedKeys.length === 1 ? new Promise<Response>(() => {}) : Promise.resolve(response({ ...operationFixture('succeeded'), request_id: key }));
+    }
+    return Promise.resolve(response(previewFixture()));
+  });
+  setup(fetchMock); await act(async () => {}); generate();
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' })); await act(async () => {});
+  expect(postedKeys).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: '重试原请求' })); await act(async () => {});
+  expect(postedKeys).toHaveLength(2);
+  expect(postedKeys[1]).toBe(postedKeys[0]);
+  expect(screen.getByRole('heading', { name: '示例研发团队' })).toBeVisible();
+});
+
+test('accepted_operation_with_hanging_attached_preview_releases_busy_state', async () => {
+  vi.useFakeTimers();
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (url.endsWith('/current')) return Promise.resolve(response(operationFixture('succeeded')));
+    if (url.includes('/preview')) return new Promise<Response>(() => {});
+    return Promise.resolve(response(null));
+  });
+  setup(fetchMock);
+  await act(async () => {});
+  await act(() => vi.advanceTimersByTimeAsync(10000));
+  expect(screen.getByText(/日报预览请求超时/)).toBeVisible();
+  expect(screen.getByRole('button', { name: '查询执行结果' })).toBeEnabled();
+});
+
 test('query_feedback_completion_describes_the_execution_date', async () => {
   const value = { ...operationFixture('succeeded'), report_date: '2026-09-24' };
   setup(vi.fn().mockImplementation(() => Promise.resolve(response(value)))); await screen.findByText('正在查看 2026-09-24 的操作结果');

@@ -1,10 +1,10 @@
 # 智能日报生成器架构设计（Design）
 
-- 版本：v1.3（2026-10-11）
-- 下一轮变更：2026-10-11 操作反馈与可选邮件收件人设计已获用户确认，实施计划已确认；§1.6 / ADR-006 定义增量，Task19–21开发、完整回归和独立审查修复完成，用户已授权PR#4合并main并发布v1.3.0。
-- 状态：Task15–18及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；产品版本1.3.0（2026-10-11），GitHub交付按已授权的分支→PR→main→Release流程执行，正式记录见 docs/frontend/v1.3-release.md。
+- 版本：v1.3.1（2026-10-11）
+- 维护状态：v1.3.0 已按授权通过 PR #4 发布。Task22 维护边界已在隔离分支修复并独立审查；其发布与本地合并由 Task23 跟踪。异步请求、采集和 API 契约没有增加新端点或改变 v1.3.0 行为契约。
+- 状态：Task15–22及R01–R12已验收；真实GitHub提交、飞书完成任务、工作日消息页面及双渠道实际收件证据齐全；版本升级和交付记录见 `docs/frontend/v1.3.1-release.md`。
 - 上游：[`proposal.md`](proposal.md)
-- 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 保留）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 已实现、真实业务验收通过）
+- 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 只读基线）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 操作基线与 v1.3 增量均已实现）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
 
 ## 1. 架构概览
@@ -99,7 +99,7 @@ React <──历史 GET / 受保护的预览和操作状态 GET──┘
 
 上游为 proposal §8/N01–N06；决策见 [ADR-006](adrs/006-operation-feedback-email-selection.md)，具体字段及迁移见 [操作契约 §7](contracts/web-operations.md)。本节是已实现增量，§1.4 的固定目标和整邮件渠道重复限制保留为 v1.2 历史规则，实施后按本节明确替换，不同时应用两种规则。
 
-**前端反馈**：沿用 React 状态、现有 fetch/Zod 与请求票据，不增加 UI/状态依赖。查询、预览各自设置动作提示与按钮加载文案；提示放在按钮附近并以 aria-live/role=status 提供反馈，出错可用 role=alert。查询完成时间使用浏览器完成本次请求的本地时间（展示时区），与服务器 created_at/updated_at 和 report_date 分开；查询 null 清空操作记录并显示暂无记录。预览成功由 App 的正文标题 ref 完成焦点与滚动；通过 tabIndex=-1 支持程序焦点，尊重减少动画偏好。焦点移动仅由用户主动预览成功触发，恢复状态/轮询不抢焦点。旧 ticket、日期、Token 失效后不能更新动作反馈或移动焦点。
+**前端反馈**：沿用 React 状态、现有 fetch/Zod 与请求票据，不增加 UI/状态依赖。查询、预览各自设置动作提示与按钮加载文案；提示放在按钮附近并以 aria-live/role=status 提供反馈，出错可用 role=alert。查询完成时间使用浏览器完成本次请求的本地时间（展示时区），与服务器 created_at/updated_at 和 report_date 分开；查询 null 清空操作记录并显示暂无记录。预览成功由 App 的正文标题 ref 完成焦点与滚动；通过 tabIndex=-1 支持程序焦点，尊重减少动画偏好。焦点移动仅由用户主动预览成功触发，恢复状态/轮询不抢焦点。旧 ticket、日期、Token 失效后不能更新动作反馈或移动焦点。令牌验证、生成/推送请求及附带预览等待最多 10 秒；超时释放界面忙碌态，写明下一步。生成/推送响应未知时保留原幂等键供显式查询，不自动再次 POST。
 
 主动查询/预览的 GET 采用已有历史查询的 10 秒等待上限，到期显示明确提示；操作轮询继续保留 120 秒上限，前端停止等待不代表后台取消。预览失败清除有效 controlPreview；若仍展示已加载只读历史，需明确预览未就绪，不能据其推送。
 

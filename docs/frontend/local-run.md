@@ -1,6 +1,6 @@
 # 本机日报页面与 API
 
-当前版本 v1.3.0，Task 11–21 开发和回归完成，发布记录见 [v1.3版本说明](v1.3-release.md)。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节；原 v1.2.0 记录作为发布基线。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。最新复核及验证边界见 [本轮交付说明](operation-feedback-email-selection-acceptance.md)；[v1.2最终交付说明](v1.2-final-handover.md)保留历史证据。
+当前版本 v1.3.1，Task 11–23 开发、维护和回归完成，发布记录见 [v1.3.1版本说明](v1.3.1-release.md)。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节；原 v1.2.0、v1.3.0 记录作为发布基线。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。最新复核及验证边界见 [v1.3.1维护验证记录](v1.3.1-maintenance-tdd.md)；[v1.2最终交付说明](v1.2-final-handover.md)保留历史证据。
 
 ## Python 安装与启动（Windows PowerShell）
 
@@ -97,7 +97,7 @@ Task15–17已实现。默认仍为只读；操作模式必须成对启动：后
 
 ```powershell
 Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report'
-$env:PYTHONPATH = 'E:\worktrees\operation-feedback-email-selection\smart-daily-report\src'
+$env:PYTHONPATH = 'E:\MyCode\smart-daily-report\src'
 # 将自己保管的 .env 加载到此窗口的进程环境；加载方法见 README。
 & 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe' -m smart_daily_report.web.main --config '.\config.yaml'
 ```
@@ -109,7 +109,7 @@ GitHub公共库可匿名但有限流；私有库需读取权限。飞书应用�
 ### 窗口 B：React 操作页面
 
 ```powershell
-Set-Location 'E:\worktrees\operation-feedback-email-selection\smart-daily-report\frontend'
+Set-Location 'E:\MyCode\smart-daily-report\frontend'
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev

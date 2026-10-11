@@ -48,6 +48,24 @@ def test_unlinked_historical_commit_is_included_without_unmapped_warning(config,
     assert "records_unmapped" not in events
 
 
+def test_malformed_github_identity_is_source_failure_without_blocking_healthy_feishu_source(config, tmp_path):
+    from dataclasses import replace
+    cfg = replace(config, github_repositories=["acme/repo"], lark_project_ids=["project"],
+                  lark_app_id="app", lark_app_secret="secret", database_path=str(tmp_path / "db.sqlite"))
+    def handler(request):
+        if request.url.path.endswith("/repos/acme/repo/commits"):
+            return httpx.Response(200, json=[{"sha": "sha", "commit": {"message": "change", "author": {"name": "A", "date": "2026-09-25T02:00:00Z"}},
+                "author": {"login": 123}, "html_url": "https://git/sha", "stats": {"additions": 1, "deletions": 0}, "files": []}])
+        if request.url.path.endswith("/auth/v3/tenant_access_token/internal"):
+            return httpx.Response(200, json={"tenant_access_token": "synthetic-token"})
+        if request.url.path.endswith("/task/v2/tasklists/project/tasks"):
+            return httpx.Response(200, json={"code": 0, "data": {"items": [], "has_more": False}})
+        return httpx.Response(404)
+    result = run_report(cfg, date(2026, 9, 25), dry_run=True, client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert result.success and result.report is not None
+    assert result.report.source_status == {"github_commits": "failure", "lark_tasks": "success", "lark_messages": "success"}
+
+
 def test_weekend_skips_before_any_network_or_storage(config, tmp_path):
     config = config.__class__(**{**config.__dict__, "database_path": str(tmp_path / "db.sqlite")})
     result = run_report(config, date(2026, 9, 26), dry_run=True)

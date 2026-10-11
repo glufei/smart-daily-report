@@ -77,6 +77,52 @@ def test_github_invalid_response_returns_failure():
     assert result.status == "failure" and result.error_code == "invalid_payload"
 
 
+@pytest.mark.parametrize("field,value", [("login", 123), ("name", ["unexpected"])])
+def test_github_non_string_author_identity_fails_source_instead_of_emitting_invalid_record(field, value):
+    item = {"sha": "sha", "commit": {"message": "change", "author": {"name": "A", "date": "2026-09-25T01:00:00Z"}},
+            "author": {"login": "octo"}, "html_url": "https://git/sha", "stats": {"additions": 1, "deletions": 0}, "files": []}
+    (item["author"] if field == "login" else item["commit"]["author"])[field] = value
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[item])))
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    result = collect_commits(client, ["acme/repo"], window)
+    assert result.status == "failure" and result.error_code == "invalid_payload" and result.records == []
+
+
+def test_github_repeated_commit_page_url_fails_with_bounded_requests():
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        if len(calls) > 2:
+            return httpx.Response(400)
+        if len(calls) == 1:
+            return httpx.Response(200, json=[], headers={"Link": '<https://api.test/repos/acme/repo/commits?page=2>; rel="next"'})
+        return httpx.Response(200, json=[], headers={"Link": '<https://api.test/repos/acme/repo/commits?page=2>; rel="next"'})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    result = collect_commits(client, ["acme/repo"], window, "https://api.test")
+    assert result.status == "failure" and result.error_code == "invalid_pagination" and result.records == []
+    assert len(calls) == 2
+
+
+def test_lark_non_string_sender_identity_fails_source_instead_of_emitting_invalid_record():
+    payload = {"code": 0, "data": {"items": [{"message_id": "m", "content": "日报完成", "sender": {"id": 123},
+              "create_time": "2026-09-25T02:00:00Z"}], "has_more": False}}
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)))
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    result = collect_messages(client, ["chat"], window, [], [], FakeToken(), "https://lark.test", "/messages")
+    assert result.status == "failure" and result.error_code == "invalid_payload" and result.records == []
+
+
+@pytest.mark.parametrize("sender", [[], "", 0])
+def test_lark_falsy_non_object_sender_fails_source_instead_of_becoming_unassigned(sender):
+    payload = {"code": 0, "data": {"items": [{"message_id": "m", "content": "日报完成", "sender": sender,
+              "create_time": "2026-09-25T02:00:00Z"}], "has_more": False}}
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)))
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    result = collect_messages(client, ["chat"], window, [], [], FakeToken(), "https://lark.test", "/messages")
+    assert result.status == "failure" and result.error_code == "invalid_payload" and result.records == []
+
+
 def test_github_follows_link_header_and_marks_rate_limit():
     calls, waits = [], []
     def handler(request):

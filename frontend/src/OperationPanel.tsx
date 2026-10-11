@@ -31,6 +31,13 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     stop(); setActionFeedback(null); const controller = new AbortController(); work.current.controller = controller;
     return { id: work.current.id, signal: controller.signal };
   }
+  function timeOut(ticket: ReturnType<typeof begin>, text: string) {
+    if (ticket.id !== work.current.id) return;
+    stop(); locked.current = false; setBusy(false); setMessage(text);
+  }
+  function limitRequest(ticket: ReturnType<typeof begin>, text: string) {
+    work.current.actionTimer = setTimeout(() => timeOut(ticket, text), 10000);
+  }
   useEffect(() => { stop(); setBusy(false); setActionFeedback(null); onPreview(null); }, [date, onPreview]);
   useEffect(() => () => stop(), []);
   function blocked(channel: Channel) {
@@ -77,6 +84,8 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
     setMessage(value.kind === 'generation' ? texts[value.status] : deliveryTexts[value.status]);
     if (value.report_revision && value.report_date === selectedDate) {
       onPreview(null);
+      clearTimeout(work.current.actionTimer);
+      limitRequest(ticket, '日报预览请求超时，请点击“预览日报”重试。');
       try {
         const preview = await getPreview(selectedDate, token, ticket.signal);
         if (ticket.id === work.current.id && preview.report.report_date === selectedDate) {
@@ -87,15 +96,18 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
           }
         }
       } catch (error) { if (ticket.id === work.current.id) failure(error); }
+      finally { if (ticket.id === work.current.id) clearTimeout(work.current.actionTimer); }
     }
   }
   async function authenticate() {
     if (!token.trim()) { setMessage('请输入操作令牌'); tokenInput.current?.focus(); return; }
     const ticket = begin(); setBusy(true); setCanRetry(false);
+    limitRequest(ticket, '验证请求超时，请重试验证令牌。');
     try {
       const current = pending.current ? await getOperationByKey(pending.current.key, token, ticket.signal)
         : await getCurrentOperation(token, ticket.signal);
       if (ticket.id !== work.current.id) return;
+      clearTimeout(work.current.actionTimer);
       setAuthenticated(true); await show(current, ticket, date);
     } catch (error) {
       if (ticket.id === work.current.id) {
@@ -113,12 +125,14 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
   }
   async function submitRequest(request: PendingRequest) {
     if (locked.current) return;
-    locked.current = true; setBusy(true); setCanRetry(false);
+    locked.current = true; setBusy(true); setCanRetry(false); setMessage('');
     if (request.kind === 'generation') onPreview(null);
     const ticket = begin(); pending.current = request;
+    limitRequest(ticket, '执行结果未知，请查询原请求；系统不会自动重发。');
     try {
       const accepted = request.kind === 'generation' ? await generateReport(request.date, token, request.key, ticket.signal)
         : await deliverReport(request.date, request.revision, request.channels, request.emailRecipients, token, request.key, ticket.signal);
+      if (ticket.id === work.current.id) clearTimeout(work.current.actionTimer);
       await show(accepted, ticket, date);
     } catch (error) {
       if (ticket.id !== work.current.id) return;
@@ -129,7 +143,11 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
         try { await show(await getOperationByKey(request.key, token, ticket.signal), ticket, date); }
         catch (lookupError) { if (ticket.id === work.current.id) { failure(lookupError); setCanRetry(lookupError instanceof OperationError && lookupError.code === 'operation_not_found'); setMessage('执行结果尚未确认'); } }
       }
-    } finally { locked.current = false; if (ticket.id === work.current.id) setBusy(false); }
+    } finally {
+      if (ticket.id === work.current.id) {
+        clearTimeout(work.current.actionTimer); locked.current = false; setBusy(false);
+      }
+    }
   }
   function startAction(kind: 'query' | 'preview', ticket: ReturnType<typeof begin>) {
     setMessage('');
@@ -151,13 +169,6 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       setActionFeedback({ kind: 'query', pending: false, completedAt: new Date().toISOString(),
         text: result ? `执行结果查询完成。操作：${result.kind === 'generation' ? '生成日报' : '推送日报'} · ${result.report_date} · ${states[result.status]}；服务器更新时间：${new Date(result.updated_at).toLocaleString()}。` : '暂无执行记录' });
       if (result) {
-        if (result.status !== 'running' && result.report_revision && result.report_date === date) {
-          work.current.actionTimer = setTimeout(() => {
-            if (ticket.id !== work.current.id) return;
-            stop(); setBusy(false); onPreview(null);
-            setMessage('日报预览请求超时，请点击“预览日报”重试。');
-          }, 10000);
-        }
         await show(result, ticket, date);
       } else { setOperation(null); setMessage(''); }
     } catch (error) {
