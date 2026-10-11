@@ -35,8 +35,12 @@ def collect_commits(client: httpx.Client, repositories: Sequence[str], window: C
         headers["Authorization"] = f"Bearer {token}"
     for repository in repositories:
         page_url = f"{api_base_url.rstrip('/')}/repos/{repository}/commits"
+        seen_pages: set[str] = set()
         params = {"since": window.start.isoformat(), "until": window.end.isoformat(), "per_page": 100}
         while page_url:
+            if page_url in seen_pages:
+                return CollectResult("github_commits", "failure", error_code="invalid_pagination", message="GitHub commit pagination failed", attempts=total_attempts)
+            seen_pages.add(page_url)
             args = {"headers": headers, "params": params, "timeout": 10}
             response, attempts, error = _get_github(client, page_url, sleep, **args)
             total_attempts += attempts - 1
@@ -82,10 +86,14 @@ def collect_commits(client: httpx.Client, repositories: Sequence[str], window: C
                             details_url = detail_response.links.get("next", {}).get("url")
                         changed_files = filenames
                     api_author = item.get("author") or {}
+                    author_login, author_name = api_author.get("login"), author.get("name")
+                    if (author_login is not None and not isinstance(author_login, str)
+                            or author_name is not None and not isinstance(author_name, str)):
+                        raise ValueError("Invalid commit author identity")
                     committed = author.get("date")
                     records.append(CommitRecord(
                         record_id=str(item["sha"]), repository=repository,
-                        author_login=api_author.get("login"), author_name=author.get("name"),
+                        author_login=author_login, author_name=author_name,
                         message=str(commit.get("message", "")).splitlines()[0],
                         committed_at=__import__("datetime").datetime.fromisoformat(committed.replace("Z", "+00:00")),
                         url=str(item.get("html_url", "")),

@@ -2,9 +2,9 @@
 
 从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成「代码提交 / 任务进展 / 协作沟通」日报，保存到 SQLite，并按需发送邮件和飞书通知。
 
-当前版本：[v1.3.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.0)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
+当前版本：[v1.3.1](https://github.com/glufei/smart-daily-report/releases/tag/v1.3.1)。前端使用 React，后端使用 FastAPI；界面经过 OpenDesign 设计迭代，开发遵循 SDD 与 TDD。运行项目不需要安装 OpenDesign，也不依赖模型生成摘要。
 
-v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前逐地址确认。升级时前后端须一起更新；原 v1.2.0 标签不变。详见 [版本说明](docs/frontend/v1.3-release.md)，本轮验证及交付边界见 [操作改进验收说明](docs/frontend/operation-feedback-email-selection-acceptance.md)。
+v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前逐地址确认。v1.3.1 修复超时后旧请求可能干扰新请求、飞书异常发送者字段绕过校验的问题，并更新受安全公告影响的前端开发依赖。升级时前后端须一起更新；原 v1.2.0、v1.3.0 标签保持不变。详见 [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md)、[v1.3.0 版本说明](docs/frontend/v1.3-release.md)和[维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md)。
 
 ## 先选择你要做什么
 
@@ -19,7 +19,7 @@ v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前
 
 ## 一、当前电脑直接启动
 
-这部分适用于作者已经配置好的电脑。**真实配置和历史数据库保留在 `E:\worktrees\v1-2-real-integration\smart-daily-report`**，Python 环境位于 `E:\MyCode\smart-daily-report\.runtime\venv`。本轮改进代码在 `E:\worktrees\operation-feedback-email-selection\smart-daily-report`，与私人数据分开保存。下面后端在原配置目录运行，但通过 PYTHONPATH 读取本轮代码；前端也从本轮代码目录启动。首次克隆者使用第四节，不能照抄作者私有目录。
+这部分适用于作者已经配置好的电脑。**真实配置和历史数据库保留在 `E:\worktrees\v1-2-real-integration\smart-daily-report`**，Python 环境位于 `E:\MyCode\smart-daily-report\.runtime\venv`。v1.3.1 合并后，项目代码位于 `E:\MyCode\smart-daily-report`；下面后端在原配置目录运行，通过 PYTHONPATH 读取合并后的代码，前端也从该代码目录启动。首次克隆者使用第四节，不能照抄作者私有目录。
 
 ### 1. 窗口 A：启动真实后端
 
@@ -27,7 +27,7 @@ v1.3.0 新增明确的查询/预览反馈，以及配置邮箱勾选和发送前
 
 ```powershell
 Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report'
-$env:PYTHONPATH = 'E:\worktrees\operation-feedback-email-selection\smart-daily-report\src'
+$env:PYTHONPATH = 'E:\MyCode\smart-daily-report\src'
 
 Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
     $entry = $_.Trim()
@@ -52,7 +52,7 @@ Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
 再打开一个 PowerShell 窗口，执行：
 
 ```powershell
-Set-Location 'E:\worktrees\operation-feedback-email-selection\smart-daily-report\frontend'
+Set-Location 'E:\MyCode\smart-daily-report\frontend'
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
@@ -84,7 +84,7 @@ npm run dev
 
 断线后先「查询执行结果」，系统查询原请求，不自动再次发送；只有原请求未找到时才提供「重试原请求」，该重试保留原先确认的地址。不要删除操作数据库来解除限制。日期、令牌或预览变化会清空邮箱选择并使旧确认失效。
 
-“查询执行结果”和“预览日报”都会就近显示加载、完成或失败提示。查询完成会更新“本次查询时间”，即使结果没有变化；主动查询/预览等待超过10秒会提示重新操作，后台任务不会因此取消。
+“查询执行结果”和“预览日报”都会就近显示加载、完成或失败提示。查询完成会更新“本次查询时间”，即使结果没有变化；令牌验证、生成/推送请求及预览等待超过10秒会明确提示并释放页面忙碌状态，后台任务不会因此取消。若生成/推送请求超时，先点“查询执行结果”核对原请求；系统保留原幂等键，绝不自动再次提交。
 
 本机已有以下真实日报，可先选择这些日期查看：
 
@@ -296,13 +296,14 @@ npm run test -- --run --coverage
 npm run build
 ```
 
-浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.2.0 发布验收：Python **286 项 / 95.03% 覆盖率**，前端 **102 项**，只读/操作浏览器 **14＋26 项**；前端业务模块逐项覆盖率均 ≥90%。这些是发布时记录，详细命令、真实验收和验证边界见下表。
+浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.3.1 发布验收：Python **322 项 / 95.30% 覆盖率**，前端 **141 项**，只读/操作浏览器 **14＋38 项**；前端语句/分支/函数/行覆盖率为 **97.54%/95.03%/98.86%/100%**。v1.2.0 发布时的 286 项 Python、102 项前端及 14＋26 项浏览器结果保留为历史记录。完整命令和边界见[维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md)。
 
 ## 文档导航
 
 | 文档 | 内容 |
 | --- | --- |
 | [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
+| [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md) / [维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md) | 发布后维护修复、测试证据和版本交付记录 |
 | [需求规范](specs/proposal.md) / [架构设计](specs/design.md) / [任务清单](specs/tasks.md) | SDD 的需求、技术方案、任务依赖和验收标准 |
 | [本机运行说明](docs/frontend/local-run.md) | 模式切换、构建预览、测试命令及本机路径 |
 | [配置指南](docs/frontend/v1.2-configuration-163-feishu.md) | 163 SMTP、GitHub、飞书凭证与配置示例 |

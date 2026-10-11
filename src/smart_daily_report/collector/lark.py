@@ -169,7 +169,14 @@ def collect_messages(client: httpx.Client, chat_ids: Sequence[str], window: Coll
                         continue
                     if keywords and not any(word.casefold() in content.casefold() for word in keywords if word):
                         continue
-                    sender = item.get("sender") or {}
+                    sender = item.get("sender")
+                    if sender is None:
+                        sender = {}
+                    if not isinstance(sender, dict):
+                        raise ValueError("Invalid message sender")
+                    for field in ("id", "sender_id"):
+                        if field in sender and sender[field] is not None and not isinstance(sender[field], str):
+                            raise ValueError("Invalid message sender identity")
                     records.append(MessageRecord(
                         record_id=str(item.get("message_id") or item.get("id")),
                         sender_user_id=sender.get("id") or sender.get("sender_id"),
