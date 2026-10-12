@@ -1,6 +1,6 @@
 # 本机日报页面与 API
 
-当前已发布版本为 v1.5.0。Task25–27 的日期规则、网页摘要、来源分组和时区显示已完成实现与验证。Python 332 项、前端 145 项、只读/操作浏览器 14＋38 项全部通过；两种 Playwright 进程均以退出码 0 结束。完整证据见 [v1.5.0 版本说明](v1.5.0-release.md)和 [Task27 TDD 记录](report-layout-timezone-tdd.md)。v1.4.0 历史发布见[版本变更记录](v1.4.0-release.md)，v1.3.1发布见[版本说明](v1.3.1-release.md)。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节；原 v1.2.0、v1.3.0 记录作为发布基线。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。最新复核及验证边界见 [v1.3.1维护验证记录](v1.3.1-maintenance-tdd.md)；[v1.2最终交付说明](v1.2-final-handover.md)保留历史证据。
+当前已发布版本为 v1.6.0。此版本统一邮件、网页和飞书的品牌标题与来源分区样式，扩大网页阅读列并使用适配邮件客户端的表格布局。Python 335 项（覆盖率 95.35%）、前端 147 项、桌面与手机浏览器 16 项全部通过，TypeScript 类型检查及生产构建通过。完整证据见 [v1.6.0 版本说明](v1.6.0-release.md)。v1.5.0 的每日生成规则、来源分组和时区行为见 [v1.5.0 版本说明](v1.5.0-release.md)及 [Task27 TDD 记录](report-layout-timezone-tdd.md)；v1.4.0 及更早历史发布见对应版本说明。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。历史验收证据保留在各 TDD 记录和 [v1.2 最终交付说明](v1.2-final-handover.md)。
 
 ## Python 安装与启动（Windows PowerShell）
 
