@@ -16,7 +16,7 @@ h1,h2,h3,h4,h5,p { margin:0; }
 h1,h2 { font-family:var(--font-display); font-weight:600; }
 a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
 a:hover { color:var(--accent); }
-.container { max-width:920px; margin-inline:auto; padding-inline:20px; }
+.container { max-width:1080px; margin-inline:auto; padding-inline:20px; }
 .topnav { background:var(--surface); border-bottom:1px solid var(--border); }
 .topnav-inner { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-block:16px; flex-wrap:wrap; }
 .brand { display:flex; align-items:center; gap:10px; }

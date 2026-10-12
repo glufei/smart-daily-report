@@ -129,7 +129,7 @@ export default function App() {
 
   return <>
     {![undefined, '', 'readonly', 'operations'].includes(import.meta.env.VITE_API_MODE) && <p role="alert">前端运行模式配置无效</p>}
-    <header className="topnav"><div className="container topnav-inner"><div className="brand"><h1 className="logo">智能日报</h1><span className="tag">{import.meta.env.VITE_API_MODE === 'operations' ? '采集与推送' : '只读'}</span></div><span className="topnav-sub">研发团队 · 日报查看</span></div></header>
+    <header className="topnav"><div className="container topnav-inner"><div className="brand"><h1 className="logo">高畅智能日报</h1><span className="tag">{import.meta.env.VITE_API_MODE === 'operations' ? '采集与推送' : '只读'}</span></div><span className="topnav-sub">研发团队 · 日报查看</span></div></header>
     <main id="content"><section className="section"><div className="container"><form className="query-card" onSubmit={submit} noValidate>
       <div className="query-bar"><div className="field query-field"><label htmlFor="report-date">报告日期</label>
         <input id="report-date" type="date" className="input" value={date} onChange={event => { cancel(); setControlPreview(null); setDate(event.target.value); setView({ kind: 'initial' }); }} /></div>
@@ -145,6 +145,6 @@ export default function App() {
         {view.kind === 'error' && <><span className="state-icon" aria-hidden="true">!</span><h2>查询失败</h2><p>{view.message}</p><button type="button" className="btn btn-accent-outline" onClick={() => void query()}>重新查询</button></>}
       </div>}
     </div></section></main>
-    <footer className="pagefoot"><div className="container"><strong>智能日报 · {import.meta.env.VITE_API_MODE === 'operations' ? '预览后确认推送' : '只读查看'}</strong><span className="meta">查看已保存的团队日报</span></div></footer>
+    <footer className="pagefoot"><div className="container"><strong>高畅智能日报 · {import.meta.env.VITE_API_MODE === 'operations' ? '预览后确认推送' : '只读查看'}</strong><span className="meta">查看已保存的团队日报</span></div></footer>
   </>;
 }

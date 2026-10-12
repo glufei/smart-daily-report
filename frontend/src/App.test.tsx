@@ -25,6 +25,12 @@ test('viewing saved history preserves every member and the distinction between e
   expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'GET', cache: 'no-store', credentials: 'omit' });
 });
 
+test('shows the shared 高畅智能日报 brand in the webpage masthead', () => {
+  vi.stubGlobal('fetch', vi.fn());
+  render(<App />);
+  expect(screen.getByRole('heading', { name: '高畅智能日报', level: 1 })).toBeInTheDocument();
+});
+
 test('shows a deterministic summary before each member’s source details', async () => {
   const report = reportFixture();
   const secondMember = report.members[1];

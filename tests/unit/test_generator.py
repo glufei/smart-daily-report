@@ -42,9 +42,28 @@ def test_member_summary_counts_records_before_preserving_source_details(records)
     parsed = TextContent()
     parsed.feed(report.html)
     html_text = "".join(parsed.parts)
-    assert html_text.index("今日总结") < html_text.index("代码提交")
-    assert all(line in html_text for line in expected)
-    assert "acme/repo: fix bug" in html_text and "Ship（done）" in html_text and "日报完成" in html_text
+    assert html_text.index("今日概览") < html_text.index("GitHub｜代码提交")
+    assert all(line.replace("：", "") in html_text for line in expected)
+    assert "acme/repo" in html_text and "fix bug" in html_text and "Ship" in html_text and "日报完成" in html_text
+
+
+def test_email_sections_separate_summary_platforms_and_record_metadata(records):
+    member = MemberReport("u1", "张三", [records["commit"]], [records["task"]], [records["message"]])
+    report = generate_daily_report(date(2026, 9, 25), "team", [member], {
+        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
+    }, datetime.now(timezone.utc))
+
+    email = report.html
+    assert '<table role="presentation"' in email
+    assert 'width="860"' in email and 'max-width:860px' in email
+    assert "高畅智能日报" in email
+    assert "今日概览" in email and email.count("1 条") >= 3
+    assert "GitHub｜代码提交（1 条）" in email
+    assert "飞书｜任务与工作消息" in email
+    assert '<strong>fix bug</strong>' in email
+    assert "acme/repo · 2026-09-25 10:00 UTC · +0 / −0 · 0 个文件" in email
+    assert '<strong>Ship</strong>' in email and "状态：done · 2026-09-25 10:00 UTC" in email
+    assert '<strong>日报完成</strong>' in email and "时间：2026-09-25 10:00 UTC" in email
 
 
 def test_single_member_report_avoids_repeated_identity_and_prioritizes_summary(records):
@@ -53,20 +72,23 @@ def test_single_member_report_avoids_repeated_identity_and_prioritizes_summary(r
         "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
     }, datetime.now(timezone.utc))
 
-    assert report.markdown.startswith("# Chang GAO 日报（2026-10-12）\n")
+    assert report.markdown.startswith("# 高畅智能日报（2026-10-12）\n")
+    assert report.markdown.count("\n---\n") >= 2
     assert "## Chang GAO" not in report.markdown
     assert report.markdown.index("## 今日总结") < report.markdown.index("## GitHub｜代码提交")
-    assert "font-size:18px;line-height:1.7" in report.html
+    assert 'font-size:16px;line-height:1.6;color:#243247' in report.html
     assert "报告日期：2026-10-12" in report.html
+    assert "高畅智能日报" in report.html
+    assert 'width="860"' in report.html and 'max-width:860px' in report.html
     assert "Chang GAO 日报" not in report.html
     assert "<h2>Chang GAO</h2>" not in report.html
-    assert report.html.index("今日总结") < report.html.index("GitHub｜代码提交")
+    assert report.html.index("今日概览") < report.html.index("GitHub｜代码提交")
 
     multi_member = generate_daily_report(date(2026, 10, 12), "Chang GAO", [member, MemberReport("u2", "Li Hua")], {
         "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
     }, datetime.now(timezone.utc))
     assert "## Chang GAO" in multi_member.markdown
-    assert '<h2 style="font-size:24px' in multi_member.html and ">Chang GAO</h2>" in multi_member.html
+    assert '<h2 style="margin:0;font-size:21px' in multi_member.html and ">Chang GAO</h2>" in multi_member.html
 
 
 def test_member_summary_distinguishes_zero_records_from_failed_source():
@@ -94,9 +116,9 @@ def test_member_summary_distinguishes_zero_records_from_failed_source():
     parsed = TextContent()
     parsed.feed(report.html)
     html_text = "".join(parsed.parts)
-    assert failure_count in html_text
-    assert all(line in html_text for line in zero_counts)
-    assert "代码提交：0 条" not in html_text
+    assert "代码提交获取失败，数量未知" in html_text
+    assert all(line.replace("：", "") in html_text for line in zero_counts)
+    assert "代码提交0 条" not in html_text
 
 
 def test_report_groups_details_by_platform_and_labels_automated_summary(records):
@@ -134,10 +156,10 @@ def test_report_groups_details_by_platform_and_labels_automated_summary(records)
 
     parsed = Headings()
     parsed.feed(report.html)
-    assert "系统自动生成" in "".join(parsed.text) or "系统自动生成" in report.html
-    assert parsed.text == ["报告日期：2026-09-25", "今日总结", "GitHub｜代码提交",
-                           "提交明细", "飞书｜任务与工作消息", "任务进展", "工作消息"]
-    assert parsed.tags == ["h1", "h2", "h2", "h3", "h2", "h3", "h3"]
+    assert "按成功采集的记录汇总" in report.html
+    assert parsed.text == ["报告日期：2026-09-25", "今日概览", "GitHub｜代码提交（1 条）",
+                           "飞书｜任务与工作消息", "任务进展 · 1 条", "工作消息 · 1 条"]
+    assert parsed.tags == ["h1", "h2", "h2", "h2", "h3", "h3"]
 
 
 def test_html_escapes_untrusted_content(records):
@@ -177,7 +199,7 @@ def test_markdown_external_text_is_literal_without_extra_links_or_structure(reco
     assert rendered.tags.count('h3') == 3 and rendered.tags.count('h4') == 0
     assert rendered.hrefs == ['https://example.test/commit', 'https://example.test/task']
     assert not any(tag in rendered.tags for tag in ['strong', 'em', 'at', 'img'])
-    assert ''.join(rendered.text).count(text) == 4
+    assert ''.join(rendered.text).count(text) == 3
     assert report.members[0].messages[0].content == text
 
 
