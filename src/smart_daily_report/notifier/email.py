@@ -11,7 +11,7 @@ from ..shared.models import DailyReport, DeliveryResult, SmtpConfig
 def send_email(report: DailyReport, recipients: Sequence[str], smtp_config: SmtpConfig,
                smtp_factory=smtplib.SMTP, sleep: Callable[[float], None] = time.sleep) -> DeliveryResult:
     message = EmailMessage()
-    message["Subject"] = f"{report.report_date.isoformat()} {report.team_name} 日报"
+    message["Subject"] = f"高畅智能日报（{report.report_date.isoformat()}）"
     message["From"] = smtp_config.sender
     message["To"] = ", ".join(recipients)
     message.set_content("请使用支持 HTML 的邮件客户端查看日报。")

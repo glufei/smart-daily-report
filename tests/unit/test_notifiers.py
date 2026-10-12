@@ -31,6 +31,18 @@ def test_email_delivers_html():
     result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, None, None, "from@test", []), FakeSMTP)
     assert result.success and FakeSMTP.calls == 1
 
+def test_email_subject_identifies_author_and_report_date():
+    subjects = []
+    class CapturingSMTP(FakeSMTP):
+        def send_message(self, message):
+            subjects.append(str(message["Subject"]))
+            return {}
+
+    result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, None, None, "from@test", []), CapturingSMTP)
+
+    assert result.success
+    assert subjects == ["高畅智能日报（2026-09-25）"]
+
 
 def test_email_uses_implicit_ssl_when_configured(monkeypatch):
     calls = []
