@@ -13,7 +13,7 @@ test('viewing saved history preserves every member and the distinction between e
   report.source_status.lark_tasks = 'failure'; report.members[0].tasks = [];
   const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
   await screen.findByRole('heading', { name: '示例研发团队' });
-  expect(screen.getByText(/UTC\+08:00/)).toBeInTheDocument();
+  expect(screen.getByText('2026-09-25 18:00:00（UTC+08:00）')).toBeInTheDocument();
   for (const name of ['示例成员甲', '示例成员乙']) {
     const member = screen.getByRole('article', { name });
     expect(within(member).getByRole('heading', { name, level: 3 })).toBeInTheDocument();
@@ -95,6 +95,14 @@ test('renders generated time in the timezone returned by the API', async () => {
   const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
   await screen.findByRole('heading', { name: '示例研发团队' });
   expect(screen.getByText('2026-09-25 18:00:00（UTC+08:00）')).toBeInTheDocument();
+});
+
+test('renders GitHub commit timestamps in China Standard Time regardless of browser timezone', async () => {
+  const report = reportFixture();
+  report.members[0].commits[0].committed_at = '2026-09-25T12:37:19Z';
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  expect(screen.getByText('2026-09-25 20:37:19（中国标准时间，UTC+08:00）')).toBeInTheDocument();
 });
 
 test('summary reports failed source counts as unknown instead of zero', async () => {

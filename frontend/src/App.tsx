@@ -28,6 +28,17 @@ function formatTimestamp(timestamp: string) {
   return `${match[1]} ${match[2]}（UTC${offset}）`;
 }
 
+function formatChinaTimestamp(timestamp: string) {
+  const parsed = new Date(timestamp);
+  if (!Number.isFinite(parsed.getTime())) return timestamp;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(parsed);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}（中国标准时间，UTC+08:00）`;
+}
+
 function ReportContent({ report, sources: outcomes, headingRef }: { report: Report; sources?: PreviewView['sources']; headingRef?: RefObject<HTMLHeadingElement | null> }) {
   const status = (key: keyof SourceStatus) => outcomes?.[key]?.status ?? report.source_status[key];
   const summaryValue = (key: keyof SourceStatus, count: number) => {
@@ -62,7 +73,7 @@ function ReportContent({ report, sources: outcomes, headingRef }: { report: Repo
           <h4 className="source-group-title">GitHub｜代码提交</h4>
           <Section title="提交明细" status={status('github_commits')} empty={member.commits.length === 0}>
             {member.commits.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}><span className="code">{record.repository}</span>：{record.message}</RecordLink>
-              <small>{record.committed_at} · +{record.additions} / −{record.deletions} · {record.files_changed} 个文件</small></li>)}
+              <small><time dateTime={record.committed_at}>{formatChinaTimestamp(record.committed_at)}</time> · +{record.additions} / −{record.deletions} · {record.files_changed} 个文件</small></li>)}
           </Section>
         </section>
         <section className="source-group" aria-label="飞书｜任务与工作消息">

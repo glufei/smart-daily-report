@@ -61,7 +61,7 @@ def test_email_sections_separate_summary_platforms_and_record_metadata(records):
     assert "GitHub｜代码提交（1 条）" in email
     assert "飞书｜任务与工作消息" in email
     assert '<strong>fix bug</strong>' in email
-    assert "acme/repo · 2026-09-25 10:00 UTC · +0 / −0 · 0 个文件" in email
+    assert "acme/repo · 2026-09-25 18:00:00（中国标准时间，UTC+08:00） · +0 / −0 · 0 个文件" in email
     assert '<strong>Ship</strong>' in email and "状态：done · 2026-09-25 10:00 UTC" in email
     assert '<strong>日报完成</strong>' in email and "时间：2026-09-25 10:00 UTC" in email
 

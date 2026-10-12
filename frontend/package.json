@@ -1,7 +1,7 @@
 {
   "name": "smart-daily-report-frontend",
   "private": true,
-  "version": "1.6.1",
+  "version": "1.6.2",
   "type": "module",
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"

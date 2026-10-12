@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import html
-from datetime import date, timezone
+from datetime import date, datetime, timezone
 from typing import Mapping, Sequence
 from urllib.parse import quote, urlparse
+from zoneinfo import ZoneInfo
 
 from ..shared.models import CollectResultStatus, MemberReport
 
@@ -12,6 +13,13 @@ SOURCE_GROUPS = (
     ("GitHub｜代码提交", (("提交明细", "commits", "github_commits"),)),
     ("飞书｜任务与工作消息", (("任务进展", "tasks", "lark_tasks"), ("工作消息", "messages", "lark_messages"))),
 )
+CHINA_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def _format_commit_timestamp(timestamp: datetime) -> str:
+    local = timestamp.astimezone(CHINA_TIMEZONE)
+    offset = local.strftime("%z")
+    return f"{local:%Y-%m-%d %H:%M:%S}（中国标准时间，UTC{offset[:3]}:{offset[3:]}）"
 
 
 def _summary_value(member: MemberReport, attr: str, source: str,
@@ -140,7 +148,7 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
                     output.append(f'<p style="{muted_style};margin-top:14px;padding:12px 14px;background:#f7f8fa;border-radius:6px">今日无记录</p>')
                 else:
                     for record in member.commits:
-                        timestamp = record.committed_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                        timestamp = _format_commit_timestamp(record.committed_at)
                         title = html.escape(record.message)
                         url = safe_url(record.url)
                         title_html = f'<a href="{html.escape(url, quote=True)}" style="color:#145dbf;text-decoration:none"><strong>{title}</strong></a>' if url else f'<strong>{title}</strong>'

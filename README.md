@@ -2,9 +2,9 @@
 
 从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再分别列出 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。邮件和飞书日报使用“高畅智能日报”品牌标题，网页版使用通用标题“智能日报”；三端均保留日期和成员信息。邮件正文使用最大宽度为 860px 的自适应表格，网页阅读列最大宽度为 1080px，飞书使用 Markdown 分隔线区分来源板块。三个渠道均按概览、GitHub、飞书的顺序展示；历史日报按其保存内容展示，不会自动重算。
 
-当前版本：**v1.6.1（网页标题修正）**。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。邮件和飞书继续使用“高畅智能日报”，网页标题统一为“智能日报”，避免将个人姓名展示在只读页面。v1.6.0 的跨渠道版式改进保持不变。详见 [v1.6.1 版本说明](docs/frontend/v1.6.1-release.md)和 [v1.6.0 版本说明](docs/frontend/v1.6.0-release.md)。
+当前版本：**v1.6.2（GitHub 提交时间使用中国标准时间）**。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。网页与邮件中的 GitHub 提交时间统一显示为 Asia/Shanghai（UTC+08:00），原始时间点不变。详见 [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)和 [v1.6.1 版本说明](docs/frontend/v1.6.1-release.md)。
 
-v1.6.1 将网页页眉、页脚和浏览器标题统一为“智能日报”；邮件主题、邮件正文和飞书标题继续使用“高畅智能日报”。此补丁只调整网页品牌文案，不改变日报数据、操作流程或推送内容。详见 [v1.6.1 版本说明](docs/frontend/v1.6.1-release.md)。
+v1.6.2 保持 v1.6.1 的渠道标题规则，并将网页和邮件中的 GitHub 提交时间统一转换为中国标准时间，标注 UTC+08:00。时间戳仍表示 GitHub 提交发生的同一时刻，仅改变展示时区。详见 [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)。
 
 ## 先选择你要做什么
 
@@ -308,7 +308,7 @@ npm run test -- --run --coverage
 npm run build
 ```
 
-浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.6.1 在 v1.6.0 全量回归基础上，验证前端 **147 项**、桌面与手机浏览器 **16 项**、TypeScript 类型检查和前端生产构建通过。完整 v1.6.0 后端回归为 Python **335 项 / 覆盖率 95.35%**。测试命令和本次变更见[v1.6.1 版本说明](docs/frontend/v1.6.1-release.md)。
+浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.6.2 回归验证：Python **335 项 / 覆盖率 95.36%**、前端 **148 项**、桌面与手机浏览器 **16 项**；TypeScript 类型检查及前端生产构建通过。测试命令和本次变更见[v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)。
 
 ## 文档导航
 
@@ -316,6 +316,7 @@ npm run build
 | --- | --- |
 | [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
 | [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md) / [维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md) | 发布后维护修复、测试证据和版本交付记录 |
+| [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md) | GitHub 提交时间按中国标准时间展示及回归验证 |
 | [v1.6.1 版本说明](docs/frontend/v1.6.1-release.md) | 网页使用通用标题，邮件和飞书保留个人品牌 |
 | [v1.6.0 版本说明](docs/frontend/v1.6.0-release.md) | 邮件、网页和飞书品牌/分区样式统一及全量回归 |
 | [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md) / [Task27 验收记录](docs/frontend/report-layout-timezone-tdd.md) | v1.5.0 发布版的变更、测试边界、来源分组和时区验收 |
