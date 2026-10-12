@@ -49,7 +49,7 @@ function ReportContent({ report, sources: outcomes, headingRef }: { report: Repo
       <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
     </header>
     <div className="members">{report.members.map(member => <article className="member" key={member.member_id} aria-label={member.display_name}>
-      <h3 className="member-name">{member.display_name}</h3><div className="blocks">
+      {report.members.length > 1 && <h3 className="member-name">{member.display_name}</h3>}<div className="blocks">
         <section className="block member-summary" aria-label="今日总结"><h4 className="block-label">今日总结</h4>
           <p className="summary-note">系统自动统计：仅依据下方成功采集的记录，不作人工编辑或 AI 推断。</p>
           <ul className="summary-list">

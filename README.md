@@ -1,6 +1,6 @@
 # 智能日报生成器
 
-从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再分别列出 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。日报会标注由系统自动生成；网页预览、邮件 HTML 与飞书 Markdown 使用一致的来源分组，历史日报按其保存内容展示，不会自动重算。
+从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再分别列出 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。日报会标注由系统自动生成；邮件正文以日期作为标题，单人日报省略重复成员标题，多人日报保留成员标题，飞书保留团队名与日期标题。网页和邮件正文使用更醒目的字号；历史日报按其保存内容展示，不会自动重算。
 
 当前已发布版本：**[v1.5.0](https://github.com/glufei/smart-daily-report/releases/tag/v1.5.0)**。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。v1.5.0 合并每日生成规则、GitHub/飞书分组、团队时区显示及 Windows 浏览器测试进程修复。当前完整验证为 Python 332 项、前端 145 项、只读/操作浏览器 14＋38 项；两种浏览器测试均正常退出，`npm audit` 未发现漏洞。详见 [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md)、[日报分组与时区 TDD 记录](docs/frontend/report-layout-timezone-tdd.md)、[日期规则 TDD 记录](docs/frontend/daily-generation-calendar-tdd.md)和[网页摘要 TDD 记录](docs/frontend/report-summary-web-tdd.md)。
 

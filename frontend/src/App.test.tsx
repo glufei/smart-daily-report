@@ -16,6 +16,7 @@ test('viewing saved history preserves every member and the distinction between e
   expect(screen.getByText(/UTC\+08:00/)).toBeInTheDocument();
   for (const name of ['示例成员甲', '示例成员乙']) {
     const member = screen.getByRole('article', { name });
+    expect(within(member).getByRole('heading', { name, level: 3 })).toBeInTheDocument();
     expect(within(member).getAllByRole('heading', { level: 4 }).map(el => el.textContent)).toEqual(['今日总结', 'GitHub｜代码提交', '飞书｜任务与工作消息']);
     expect(within(member).getByText('数据获取失败')).toBeInTheDocument();
   }
@@ -48,6 +49,21 @@ test('shows a deterministic summary before each member’s source details', asyn
   expect(within(emptySummary).getByText('代码提交：0 条')).toBeInTheDocument();
   expect(within(emptySummary).getByText('已完成任务：0 条')).toBeInTheDocument();
   expect(within(emptySummary).getByText('协作沟通：0 条')).toBeInTheDocument();
+});
+
+test('single-member report omits the repeated member heading while keeping the summary first', async () => {
+  const report = reportFixture();
+  report.team_name = '示例成员甲';
+  report.members = report.members.slice(0, 1);
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByText('2026-09-25', { exact: true });
+
+  const member = within(screen.getByRole('article', { name: '示例成员甲' }));
+  expect(member.queryByRole('heading', { name: '示例成员甲' })).not.toBeInTheDocument();
+  expect(member.getByRole('region', { name: '今日总结' })).toBeInTheDocument();
+  expect(member.getAllByRole('heading').map(heading => heading.textContent)).toEqual([
+    '今日总结', 'GitHub｜代码提交', '提交明细', '飞书｜任务与工作消息', '任务进展', '工作消息',
+  ]);
 });
 
 test('separates GitHub from Feishu and labels summaries as automatic', async () => {

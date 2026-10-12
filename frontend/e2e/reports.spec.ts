@@ -26,9 +26,14 @@ test('real saved reports retain every member, sections, timestamps and source st
   await expect(page.getByRole('article')).toHaveCount(2);
   for (const name of ['示例成员甲', '示例成员乙']) {
     const member = page.getByRole('article', { name });
+    await expect(member.getByRole('heading', { name, exact: true })).toBeVisible();
     await expect(member.getByRole('heading', { level: 4 })).toHaveText(['今日总结', 'GitHub｜代码提交', '飞书｜任务与工作消息']);
     await expect(member.getByRole('heading', { level: 5 })).toHaveText(['提交明细', '任务进展', '工作消息']);
   }
+  await expect(page.locator('.summary-list li').first()).toHaveCSS('font-size', '18px');
+  await expect(page.locator('.summary-note').first()).toHaveCSS('font-size', '14px');
+  await expect(page.locator('.source-group-title').first()).toHaveCSS('font-size', '20px');
+  await expect(page.locator('.records li').first()).toHaveCSS('font-size', '18px');
   await expect(page.getByRole('article', { name: '示例成员乙' }).getByText('今日无记录')).toHaveCount(3);
   await screenshot(page, info.project.name, 'normal');
   await query(page, '2026-09-26'); await expect(page.getByText('部分数据源获取失败：任务进展')).toBeVisible();
