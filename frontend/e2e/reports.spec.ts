@@ -17,7 +17,8 @@ async function screenshot(page: Page, project: string, state: string) {
 test('report layout uses a wider desktop reading column and remains within a mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: '高畅智能日报', level: 1 })).toBeVisible();
+  await expect(page).toHaveTitle('智能日报 · 只读查看');
+  await expect(page.getByRole('heading', { name: '智能日报', level: 1 })).toBeVisible();
   await expect(page.locator('.container').first()).toHaveCSS('max-width', '1080px');
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);

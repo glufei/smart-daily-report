@@ -25,10 +25,12 @@ test('viewing saved history preserves every member and the distinction between e
   expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'GET', cache: 'no-store', credentials: 'omit' });
 });
 
-test('shows the shared 高畅智能日报 brand in the webpage masthead', () => {
+test('keeps the webpage brand generic and omits the personal name', () => {
   vi.stubGlobal('fetch', vi.fn());
   render(<App />);
-  expect(screen.getByRole('heading', { name: '高畅智能日报', level: 1 })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '智能日报', level: 1 })).toBeInTheDocument();
+  expect(screen.getByText('智能日报 · 只读查看')).toBeInTheDocument();
+  expect(screen.queryByText(/高畅/)).not.toBeInTheDocument();
 });
 
 test('shows a deterministic summary before each member’s source details', async () => {
