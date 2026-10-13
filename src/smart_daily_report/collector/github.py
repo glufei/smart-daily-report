@@ -60,11 +60,11 @@ def collect_commits(client: httpx.Client, repositories: Sequence[str], window: C
                         details_url = item.get("url") or f"{api_base_url.rstrip('/')}/repos/{repository}/commits/{item.get('sha', '')}"
                         detail_args = {"headers": headers, "timeout": 10}
                         filenames: set[str] = set()
-                        seen_pages: set[str] = set()
+                        seen_detail_pages: set[str] = set()
                         while details_url:
-                            if details_url in seen_pages:
+                            if details_url in seen_detail_pages:
                                 return CollectResult("github_commits", "failure", error_code="invalid_pagination", message="GitHub commit pagination failed", attempts=total_attempts)
-                            seen_pages.add(details_url)
+                            seen_detail_pages.add(details_url)
                             detail_response, detail_attempts, detail_error = _get_github(client, details_url, sleep, **detail_args)
                             total_attempts += detail_attempts
                             if detail_error or detail_response is None:
@@ -79,7 +79,7 @@ def collect_commits(client: httpx.Client, repositories: Sequence[str], window: C
                                 if not isinstance(filename, str) or not filename:
                                     raise ValueError("Invalid commit filename")
                                 filenames.add(filename)
-                            if len(seen_pages) == 1:
+                            if len(seen_detail_pages) == 1:
                                 stats = details["stats"]
                             if len(filenames) >= 3000:
                                 return CollectResult("github_commits", "failure", error_code="details_file_limit", message="GitHub commit file completeness unavailable", attempts=total_attempts)
@@ -94,7 +94,7 @@ def collect_commits(client: httpx.Client, repositories: Sequence[str], window: C
                     records.append(CommitRecord(
                         record_id=str(item["sha"]), repository=repository,
                         author_login=author_login, author_name=author_name,
-                        message=str(commit.get("message", "")).splitlines()[0],
+                        message=(str(commit.get("message", "")).splitlines() or [""])[0],
                         committed_at=__import__("datetime").datetime.fromisoformat(committed.replace("Z", "+00:00")),
                         url=str(item.get("html_url", "")),
                         additions=int(stats.get("additions", 0)), deletions=int(stats.get("deletions", 0)),

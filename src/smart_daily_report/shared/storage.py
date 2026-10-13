@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from .models import CommitRecord, DailyReport, MemberReport, MessageRecord, Task
 
 def write_report(db_path: Path, report: DailyReport) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection, connection:
         connection.execute("""
             CREATE TABLE IF NOT EXISTS daily_reports (
                 report_date TEXT PRIMARY KEY,
@@ -46,7 +47,7 @@ def write_report(db_path: Path, report: DailyReport) -> None:
 def get_report(db_path: Path, report_date: date) -> DailyReport | None:
     if not db_path.exists():
         return None
-    with sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True) as connection:
+    with closing(sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute("SELECT * FROM daily_reports WHERE report_date = ?", (report_date.isoformat(),)).fetchone()
     if not row:

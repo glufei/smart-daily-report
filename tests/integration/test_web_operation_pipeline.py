@@ -404,7 +404,7 @@ def delivery_service(config,tmp_path,email_result=None,lark_result=None):
         def __init__(self,*args,**kwargs): pass
         def __enter__(self): return self
         def __exit__(self,*args): pass
-        def starttls(self): pass
+        def starttls(self, *, context=None): pass
         def send_message(self,message):
             sends.append(message)
             if isinstance(email_result,Exception): raise email_result

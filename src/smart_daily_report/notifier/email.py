@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import smtplib
+import ssl
 import time
 from email.message import EmailMessage
 from typing import Callable, Sequence
@@ -21,9 +22,10 @@ def send_email(report: DailyReport, recipients: Sequence[str], smtp_config: Smtp
         result = None
         try:
             connection_factory = smtplib.SMTP_SSL if smtp_config.use_ssl else smtp_factory
-            with connection_factory(smtp_config.host, smtp_config.port, timeout=10) as server:
+            tls_options = {"context": ssl.create_default_context()} if smtp_config.use_ssl else {}
+            with connection_factory(smtp_config.host, smtp_config.port, timeout=10, **tls_options) as server:
                 if smtp_config.starttls:
-                    server.starttls()
+                    server.starttls(context=ssl.create_default_context())
                 if smtp_config.username:
                     server.login(smtp_config.username, smtp_config.password or "")
                 submitted = True

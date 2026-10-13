@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from email.message import EmailMessage
+import ssl
 
 import httpx
 import pytest
@@ -19,7 +20,7 @@ class FakeSMTP:
     def __init__(self, *args, **kwargs): pass
     def __enter__(self): return self
     def __exit__(self, *args): pass
-    def starttls(self): pass
+    def starttls(self, *, context=None): pass
     def login(self, *args): pass
     def send_message(self, message):
         assert isinstance(message, EmailMessage) and "<h1>daily</h1>" in message.as_string()
@@ -31,6 +32,39 @@ def test_email_delivers_html():
     FakeSMTP.calls = 0
     result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, None, None, "from@test", []), FakeSMTP)
     assert result.success and FakeSMTP.calls == 1
+
+
+@pytest.mark.parametrize("implicit_ssl", [False, True])
+def test_email_tls_verifies_server_identity_before_login_or_send(monkeypatch, implicit_ssl):
+    events = []
+    def require_verification(context):
+        assert context is not None and context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname
+        events.append("verified_tls")
+    class VerifiedSMTP(FakeSMTP):
+        def __init__(self, *args, **kwargs):
+            if implicit_ssl:
+                require_verification(kwargs.get("context"))
+        def starttls(self, *, context=None):
+            require_verification(context)
+        def login(self, *args): events.append("login")
+        def send_message(self, message): events.append("send"); return {}
+    monkeypatch.setattr("smart_daily_report.notifier.email.smtplib.SMTP_SSL", VerifiedSMTP)
+    result = send_email(report(), ["lead@test"],
+                        SmtpConfig("smtp.test", 465 if implicit_ssl else 587, "u", "p", "from@test", [], not implicit_ssl, implicit_ssl),
+                        VerifiedSMTP)
+    assert result.success and events == ["verified_tls", "login", "send"]
+
+
+def test_email_certificate_rejection_never_authenticates_or_sends():
+    events = []
+    class UntrustedSMTP(FakeSMTP):
+        def starttls(self, *, context=None):
+            raise ssl.SSLCertVerificationError("untrusted server")
+        def login(self, *args): events.append("login")
+        def send_message(self, message): events.append("send"); return {}
+    result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, "u", "p", "from@test", []), UntrustedSMTP, lambda _: None)
+    assert not result.success and events == []
 
 def test_email_subject_identifies_author_and_report_date():
     subjects = []
@@ -65,7 +99,7 @@ def test_email_subject_distinguishes_two_generations_on_same_date():
 def test_email_uses_implicit_ssl_when_configured(monkeypatch):
     calls = []
     class FakeSSL(FakeSMTP):
-        def starttls(self):
+        def starttls(self, *, context=None):
             raise AssertionError("implicit SSL must not issue STARTTLS")
     def factory(*args, **kwargs):
         calls.append((args, kwargs))
@@ -198,7 +232,7 @@ def test_explicit_smtp_rejection_cannot_be_uncertain_or_retried(phase):
     import smtplib
     calls=[]
     class Reject(FakeSMTP):
-        def starttls(self):
+        def starttls(self, *, context=None):
             if phase=='unsupported_tls': raise smtplib.SMTPNotSupportedError('private-marker')
         def send_message(self,message):
             calls.append(message)
@@ -213,7 +247,7 @@ def test_explicit_smtp_rejection_cannot_be_uncertain_or_retried(phase):
 def test_tls_modes_and_payload_keep_confirmed_content():
     events=[]; snapshot=report()
     class Accept(FakeSMTP):
-        def starttls(self): events.append('tls')
+        def starttls(self, *, context=None): events.append('tls')
         def login(self,*args): events.append('login')
         def send_message(self,message):
             events.append('send')

@@ -98,7 +98,7 @@ def test_pipeline_collects_generates_stores_and_delivers_both_channels(config, t
         def __init__(self, *args, **kwargs): pass
         def __enter__(self): return self
         def __exit__(self, *args): pass
-        def starttls(self): pass
+        def starttls(self, *, context=None): pass
         def login(self, *args): pass
         def send_message(self, message):
             assert "fix" in message.get_body(("html",)).get_content()

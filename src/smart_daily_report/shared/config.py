@@ -24,6 +24,13 @@ def _env(mapping: Mapping, key: str, environ: Mapping[str, str]) -> str | None:
     return environ.get(name) if isinstance(name, str) and name else None
 
 
+def _string_list(mapping: Mapping, key: str, context: str) -> list[str]:
+    value = mapping.get(key, [])
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip() for item in value):
+        raise ConfigError(f"{context}.{key} must be a list of non-empty strings")
+    return list(value)
+
+
 def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConfig:
     env = os.environ if environ is None else environ
     try:
@@ -48,9 +55,9 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
         members.append(MemberConfig(
             member_id=_required(item, "member_id", f"members[{index}]"),
             display_name=_required(item, "display_name", f"members[{index}]"),
-            github_logins=list(item.get("github_logins", [])),
-            lark_user_ids=list(item.get("lark_user_ids", [])),
-            github_author_names=list(item.get("github_author_names", [])),
+            github_logins=_string_list(item, "github_logins", f"members[{index}]"),
+            lark_user_ids=_string_list(item, "lark_user_ids", f"members[{index}]"),
+            github_author_names=_string_list(item, "github_author_names", f"members[{index}]"),
         ))
     smtp_raw = team.get("smtp", {})
     if not isinstance(smtp_raw, dict):
@@ -90,11 +97,11 @@ def load_config(path: Path, environ: Mapping[str, str] | None = None) -> RunConf
         config = RunConfig(
             team_name=_required(team, "name", "team"), timezone=timezone,
             members=members,
-            github_repositories=list(team.get("github_repositories", [])),
-            lark_project_ids=list(team.get("lark_project_ids", [])),
-            lark_chat_ids=list(team.get("lark_chat_ids", [])),
-            report_keywords=list(team.get("report_keywords", [])),
-            sensitive_keywords=list(team.get("sensitive_keywords", [])),
+            github_repositories=_string_list(team, "github_repositories", "team"),
+            lark_project_ids=_string_list(team, "lark_project_ids", "team"),
+            lark_chat_ids=_string_list(team, "lark_chat_ids", "team"),
+            report_keywords=_string_list(team, "report_keywords", "team"),
+            sensitive_keywords=_string_list(team, "sensitive_keywords", "team"),
             holidays=holidays,
             database_path=str(team.get("database_path", "data/reports.sqlite3")),
             github_api_base_url=str(team.get("github_api_base_url", "https://api.github.com")).rstrip("/"),

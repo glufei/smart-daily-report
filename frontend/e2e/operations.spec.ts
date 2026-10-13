@@ -34,7 +34,7 @@ async function confirm(page: Page) {
 }
 async function screenshot(page: Page, project: string, state: string) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: path.resolve(`../docs/frontend/screenshots/operation-feedback-email-selection/${project}-${state}.png`), fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: path.resolve(process.env.DAILY_REPORT_E2E_SCREENSHOT_DIR || '../docs/frontend/screenshots/operation-feedback-email-selection', `${project}-${state}.png`), fullPage: true, animations: 'disabled' });
 }
 test.beforeEach(async () => scenario({}));
 
