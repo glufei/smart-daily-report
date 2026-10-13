@@ -30,6 +30,34 @@ def test_github_empty_is_success_and_http_failure_is_failure():
     assert result.status == "failure" and result.attempts == 3 and len(sleeps) == 2
 
 
+def test_github_list_cycle_is_detected_after_fetching_commit_details():
+    calls = []
+    listing = "https://api.github.com/repos/acme/repo/commits"
+    item = {"sha": "abc", "commit": {"message": "fix", "author": {"date": "2026-09-25T01:00:00Z"}}}
+    def handler(request):
+        calls.append(request.url.path)
+        if len(calls) > 4:
+            return httpx.Response(400)
+        if request.url.path.endswith("/abc"):
+            return httpx.Response(200, json={"stats": {}, "files": []})
+        return httpx.Response(200, json=[item], headers={"Link": f'<{listing}>; rel="next"'})
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = collect_commits(client, ["acme/repo"], window)
+    assert result.error_code == "invalid_pagination"
+    assert len(calls) == 2, "A cyclic list must stop without refetching already visited commits"
+
+
+def test_github_empty_message_does_not_discard_other_commits():
+    items = [{"sha": str(index), "commit": {"message": message, "author": {"date": "2026-09-25T01:00:00Z"}}, "stats": {}, "files": []}
+             for index, message in enumerate(("fix\nbody", ""))]
+    window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=items))) as client:
+        result = collect_commits(client, ["acme/repo"], window)
+    assert result.status == "success"
+    assert [record.message for record in result.records] == ["fix", ""]
+
+
 class FakeToken:
     def __init__(self): self.refreshes = 0
     def get(self, refresh=False):

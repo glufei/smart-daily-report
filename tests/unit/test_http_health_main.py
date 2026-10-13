@@ -75,6 +75,9 @@ def test_health_check_uses_implicit_ssl_when_configured(config, monkeypatch):
     monkeypatch.setattr("smart_daily_report.shared.health.smtplib.SMTP_SSL", SMTPSSL)
     result = check_dependencies(config, httpx.Client())
     assert result.success and calls[0][0][:2] == ("smtp.163.com", 465)
+    import ssl
+    context = calls[0][1]["context"]
+    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
 
 
 def test_health_check_accepts_public_github_repository_without_token(config, monkeypatch):

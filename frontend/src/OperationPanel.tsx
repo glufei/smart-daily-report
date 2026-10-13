@@ -26,6 +26,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
   const pending = useRef<PendingRequest | null>(null);
   function stop() {
     work.current.id++; work.current.controller?.abort(); clearTimeout(work.current.timer); clearTimeout(work.current.deadline); clearTimeout(work.current.actionTimer);
+    locked.current = false;
   }
   function begin() {
     stop(); setActionFeedback(null); const controller = new AbortController(); work.current.controller = controller;
@@ -126,9 +127,9 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
   }
   async function submitRequest(request: PendingRequest) {
     if (locked.current) return;
-    locked.current = true; setBusy(true); setCanRetry(false); setMessage('');
+    setBusy(true); setCanRetry(false); setMessage('');
     if (request.kind === 'generation') onPreview(null);
-    const ticket = begin(); pending.current = request;
+    const ticket = begin(); locked.current = true; pending.current = request;
     limitRequest(ticket, '执行结果未知，请查询原请求；系统不会自动重发。');
     try {
       const accepted = request.kind === 'generation' ? await generateReport(request.date, token, request.key, ticket.signal)

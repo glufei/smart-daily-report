@@ -67,7 +67,6 @@ collect_messages(
 ```python
 load_config(path: Path, environ: Mapping[str, str]) -> RunConfig
 validate_identity_mappings(config: RunConfig) -> None
-is_workday(day: date, holidays: set[date]) -> bool  # legacy calendar utility; not used to gate generation or delivery
 map_records_to_members(
     config: RunConfig,
     commits: Sequence[CommitRecord],

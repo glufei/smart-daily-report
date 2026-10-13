@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import html
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Mapping, Sequence
 from urllib.parse import quote, urlparse
 from zoneinfo import ZoneInfo
@@ -183,15 +183,15 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
                     continue
                 for record in records:
                     if attr == "tasks":
-                        timestamp = record.changed_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                        timestamp = _format_commit_timestamp(record.changed_at)
                         text, url = record.title, safe_url(record.url)
                         metadata = f'状态：{record.status} · {timestamp}'
                     else:
-                        timestamp = record.sent_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                        timestamp = _format_commit_timestamp(record.sent_at)
                         text, url = record.content, None
                         metadata = f'时间：{timestamp}'
                         if record.chat_name:
-                            metadata = f'{html.escape(record.chat_name)} · {metadata}'
+                            metadata = f'{record.chat_name} · {metadata}'
                     escaped = html.escape(text)
                     title_html = f'<a href="{html.escape(url, quote=True)}" style="color:#145dbf;text-decoration:none"><strong>{escaped}</strong></a>' if url else f'<strong>{escaped}</strong>'
                     output.append(

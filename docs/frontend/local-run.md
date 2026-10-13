@@ -1,6 +1,6 @@
 # 本地日报页面与 API
 
-当前版本为 v1.6.5。GitHub 提交时间在网页和邮件中均显示为 Asia/Shanghai（UTC+08:00），不改变 GitHub 原始提交时间或内部存储；网页使用通用标题。邮件主题按年级、姓名、报告日期和日报名称组成。版本变更见 [v1.6.5 版本说明](v1.6.5-release.md)及对应历史版本说明。本页说明只读启动、真实操作和 fixture；首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。真实凭证、配置和日报数据库只保存在本地，不要提交到公开仓库。
+当前版本为 v1.6.6。GitHub 提交时间在网页和邮件中、飞书任务与工作消息时间在新生成邮件中均显示为中国标准时间（Asia/Shanghai，UTC+08:00），不改变原始时间点或内部存储；网页使用通用标题。邮件主题按年级、姓名、报告日期和日报名称组成。当前审查与验证见 [项目审查记录](../project-audit-2026-10-14.md)，历史变更见对应版本说明。本页说明只读启动、真实操作和 fixture；首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。真实凭证、配置和日报数据库只保存在本地，不要提交到公开仓库。
 
 ## Python 安装与启动（Windows PowerShell）
 
@@ -8,6 +8,7 @@
 
 ```powershell
 py -3.12 -m venv .runtime/venv
+.\.runtime\venv\Scripts\python.exe -m pip install --upgrade 'pip>=26.2'
 .\.runtime\venv\Scripts\python.exe -m pip install -e ".[dev,web]"
 .\.runtime\venv\Scripts\daily-report-web.exe --database ".\data\reports.sqlite3"
 ```
@@ -76,7 +77,7 @@ npm run test:e2e
 
 Playwright 使用已安装的 Google Chrome；需要 Python 环境安装 `dev,web`，默认 `.runtime/venv/Scripts/python.exe`。其他 Python 路径可通过 `DAILY_REPORT_PYTHON` 指定。E2E 自动启动 8765/8766 两个 fixture API 及 5173 Vite，测试前需释放这些端口；不复用其他正在运行的服务。临时库仅位于 `.runtime/e2e/`，不会访问实际日报配置/数据库或发送通知。测试每次只重建自身固定的 fixture 文件。
 
-v1.2.0 发布及最终复核：102 项 Vitest、只读 14 项和操作 26 项 Playwright 通过，两种视口均无页面级横向溢出。v1.1 的历史结果为 15 项 Vitest；首次 E2E 在受限进程环境中断言通过但服务清理未结束，Ctrl+C 后退出 1，重跑 14 passed、退出 0。最新环境污染复现、修复和退出结果见最终交付说明。Playwright 有 NO_COLOR/FORCE_COLOR 的环境提示，不据此声称没有警告。
+以下为历史验收：v1.2.0 发布及最终复核包含 102 项 Vitest、只读 14 项和操作 26 项 Playwright，两种视口均无页面级横向溢出。v1.1 的历史结果为 15 项 Vitest；首次 E2E 在受限进程环境中断言通过但服务清理未结束，Ctrl+C 后退出 1，重跑 14 passed、退出 0。本轮结果以[项目审查记录](../project-audit-2026-10-14.md)为准。Playwright 有 NO_COLOR/FORCE_COLOR 的环境提示，不据此声称没有警告。
 
 ## 锁定依赖与开源复用
 
@@ -150,11 +151,12 @@ npm run dev -- --port 5174
 
 ```powershell
 $env:PYTHONPATH = Join-Path (Split-Path (Get-Location) -Parent) 'src'
-$env:DAILY_REPORT_PYTHON = (Resolve-Path '.\.runtime\venv\Scripts\python.exe').Path
+$env:DAILY_REPORT_PYTHON = (Resolve-Path '..\.runtime\venv\Scripts\python.exe').Path
 # 5173被自己需要保留的服务占用时，可使用产品已允许的4173
 $env:DAILY_REPORT_E2E_PORT = '4173'
-$env:DAILY_REPORT_E2E_SCREENSHOT_DIR = '../docs/frontend/screenshots/v1.2/readonly'
+$env:DAILY_REPORT_E2E_SCREENSHOT_DIR = '../.runtime/audit-screenshots/readonly'
 npm run test:e2e
+$env:DAILY_REPORT_E2E_SCREENSHOT_DIR = '../.runtime/audit-screenshots/operations'
 npx playwright test --config playwright.operations.config.ts
 npm run test -- --run --coverage
 npm run typecheck

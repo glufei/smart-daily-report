@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx
 import smtplib
+import ssl
 from datetime import datetime, timedelta, timezone
 
 from .http import TokenProvider
@@ -60,7 +61,8 @@ def check_dependencies(config: RunConfig, client: httpx.Client) -> HealthCheckRe
     if config.smtp.host:
         try:
             connection_factory = smtplib.SMTP_SSL if config.smtp.use_ssl else smtplib.SMTP
-            with connection_factory(config.smtp.host, config.smtp.port, timeout=3) as smtp:
+            tls_options = {"context": ssl.create_default_context()} if config.smtp.use_ssl else {}
+            with connection_factory(config.smtp.host, config.smtp.port, timeout=3, **tls_options) as smtp:
                 smtp.noop()
             checks["smtp"] = True
         except (OSError, smtplib.SMTPException):

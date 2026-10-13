@@ -5,7 +5,7 @@ team:
   database_path: data/reports.sqlite3
   github_api_base_url: https://api.github.com
   lark_api_base_url: https://open.feishu.cn/open-apis
-  github_repositories: [owner/repository]
+  github_repositories: [owner/repository] # 来源、身份和关键词均使用字符串列表；不用时填 []
   lark_project_ids: []
   lark_chat_ids: []
   report_keywords: [日报, 进展, 发布]

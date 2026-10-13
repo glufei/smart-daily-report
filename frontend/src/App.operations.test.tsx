@@ -25,6 +25,48 @@ function setup(fetchMock: ReturnType<typeof vi.fn>) {
 }
 function generate() { fireEvent.click(screen.getByRole('button', { name: '采集并生成' })); }
 
+test('reauthentication_after_post_401_allows_a_new_explicit_generation', async () => {
+  let posts = 0;
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (options.method === 'POST') {
+      posts++;
+      return Promise.resolve(response({ error: { code: posts === 1 ? 'operation_unauthorized' : 'invalid_request' } }, posts === 1 ? 401 : 400));
+    }
+    return Promise.resolve(response(null));
+  });
+  setup(fetchMock);
+  await waitFor(() => expect(screen.getByRole('button', { name: '采集并生成' })).toBeEnabled());
+  generate(); await screen.findByText('操作令牌无效或未提供');
+  fireEvent.change(screen.getByLabelText('操作令牌'), { target: { value: 'new-token' } });
+  fireEvent.click(screen.getByRole('button', { name: '验证令牌' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '采集并生成' })).toBeEnabled());
+  generate(); await waitFor(() => expect(posts).toBe(2));
+});
+
+test('date_change_releases_observer_lock_but_explicit_retry_keeps_original_request', async () => {
+  const requests: { key: string; body: string }[] = [];
+  const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (options.method === 'POST') {
+      requests.push({ key: (options.headers as Record<string, string>)['Idempotency-Key'], body: options.body as string });
+      if (requests.length === 1) return new Promise<Response>(() => {});
+      return Promise.resolve(response({ error: { code: 'invalid_request' } }, 400));
+    }
+    if (url.includes('/by-key/')) return Promise.resolve(response({ error: { code: 'operation_not_found' } }, 404));
+    return Promise.resolve(response(null));
+  });
+  setup(fetchMock);
+  await waitFor(() => expect(screen.getByRole('button', { name: '采集并生成' })).toBeEnabled());
+  generate();
+  fireEvent.change(screen.getByLabelText('报告日期'), { target: { value: '2026-09-26' } });
+  fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
+  const retry = await screen.findByRole('button', { name: '重试原请求' });
+  expect(screen.getByRole('button', { name: '采集并生成' })).toBeDisabled();
+  fireEvent.click(retry);
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1]).toEqual(requests[0]);
+  expect(JSON.parse(requests[1].body).report_date).toBe('2026-09-25');
+});
+
 test('accepted_generation_is_running_not_success_and_does_not_send', async () => {
   const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => Promise.resolve(url.endsWith('/current') ? response(null) : response({ ...operationFixture(), request_id: (options.headers as Record<string, string>)['Idempotency-Key'] }, 202)));
   setup(fetchMock); await waitFor(() => expect(screen.getByRole('button', { name: '采集并生成' })).toBeEnabled());

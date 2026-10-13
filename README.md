@@ -1,10 +1,10 @@
 # 智能日报生成器
 
-从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成可核对的今日概览，再分开展示 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。邮件和飞书日报使用配置的品牌标题，网页版使用通用标题；三个渠道均保留日期和成员信息，并按概览、GitHub、飞书的顺序展示。历史日报按其保存内容展示，不会自动重算。
+从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成可核对的今日概览，再分开展示 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。邮件和飞书日报使用品牌标题，网页版使用通用标题；三个渠道均保留日期和成员信息，并按概览、GitHub、飞书的顺序展示。历史日报按其保存内容展示，不会自动重算。
 
-当前版本：**v1.6.5**。前端使用 React，后端使用 FastAPI；日报内容只按采集记录和来源状态确定性统计，不调用模型或改写源内容。网页与邮件中的 GitHub 提交时间统一显示为 Asia/Shanghai（UTC+08:00），原始时间点不变。邮件主题按年级、姓名、报告日期和日报名称组成。飞书访问策略拒绝会显示明确错误并记录平台请求追踪 ID，便于管理员排查。详见 [v1.6.5 版本说明](docs/frontend/v1.6.5-release.md)。
+当前版本：**v1.6.6**。前端使用 React，后端使用 FastAPI；日报内容只按采集记录和来源状态确定性统计，不调用模型或改写源内容。网页与邮件中的 GitHub 提交时间、邮件中的飞书任务和工作消息时间统一显示为中国标准时间（Asia/Shanghai，UTC+08:00），原始时间点不变。邮件主题按年级、姓名、报告日期和日报名称组成。SMTP 加密连接验证服务器证书与主机名。飞书访问策略拒绝记录平台请求追踪 ID，便于管理员排查。本轮修复 GitHub 分页、空提交信息、配置列表校验及页面操作恢复问题，清理废弃工具；详见 [完整审查与验证记录](docs/project-audit-2026-10-14.md)。
 
-v1.6.2 保持 v1.6.1 的渠道标题规则，并将网页和邮件中的 GitHub 提交时间统一转换为中国标准时间，标注 UTC+08:00。时间戳仍表示 GitHub 提交发生的同一时刻，仅改变展示时区。详见 [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)。
+项目按需手动运行，无需配置定时任务。已保存的邮件 HTML 是历史快照；更新模板后，需要重新生成日报，之后发送的邮件才会使用新时间格式。
 
 ## 先选择你要做什么
 
@@ -26,6 +26,8 @@ v1.6.2 保持 v1.6.1 的渠道标题规则，并将网页和邮件中的 GitHub 
 打开一个 PowerShell 窗口，完整执行以下代码。它会加载该目录的 `.env`，然后启动 API；不会显示密钥。
 
 ```powershell
+$env:PYTHONPATH = Join-Path (Get-Location) 'src'
+
 Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
     $entry = $_.Trim()
     if ($entry -and -not $entry.StartsWith('#')) {
@@ -104,6 +106,7 @@ git clone https://github.com/glufei/smart-daily-report.git
 Set-Location '.\smart-daily-report'
 
 py -3.12 -m venv .runtime\venv
+.\.runtime\venv\Scripts\python.exe -m pip install --upgrade 'pip>=26.2'
 .\.runtime\venv\Scripts\python.exe -m pip install -e '.[dev,web]'
 
 Set-Location frontend
@@ -165,6 +168,8 @@ if (-not (Test-Path -LiteralPath 'config.yaml')) {
 | `team.database_path` | 历史库路径，默认 `data/reports.sqlite3` |
 
 不用的来源列表设为 `[]`，真实操作模式至少要启用一个来源。飞书任务使用 `/task/v2/tasklists/{tasklist_guid}/tasks`，应用还需要对应读取权限和清单访问授权；消息按关键词、敏感词、成员映射和日期规则筛选。
+
+仓库、任务清单、来源群、成员身份和关键词必须使用 YAML 字符串列表，例如 `[owner/repository]`、`[日报, 进展]`；单个值也要放在列表中。标量、数字或空字符串会被明确拒绝，避免错误采集或改变敏感词过滤规则。
 
 再在项目根目录新建 `.env`，按启用的功能填写。下面只有占位示例，须替换为实际值；每行使用 `KEY=VALUE`，值不加引号、不加行尾注释。
 
@@ -293,13 +298,14 @@ npm run test -- --run --coverage
 npm run build
 ```
 
-浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.6.2 回归验证：Python **335 项 / 覆盖率 95.36%**、前端 **148 项**、桌面与手机浏览器 **16 项**；TypeScript 类型检查及前端生产构建通过。测试命令和本次变更见[v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)。
+浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。v1.6.6 验证：Python **370 项 / 覆盖率 95.06%**、前端 **151 项**、桌面与手机浏览器 **54 项**；类型检查、两种模式构建和打包均通过。完整命令和审查范围见[项目审查记录](docs/project-audit-2026-10-14.md)。测试截图可输出到被忽略的 `.runtime` 目录，避免改写历史验收材料。
 
 ## 文档导航
 
 | 文档 | 内容 |
 | --- | --- |
-| [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
+| [本轮完整审查](docs/project-audit-2026-10-14.md) | v1.6.6 修复、清理依据、当前验证结果与同步记录 |
+| [v1.2 历史交付说明](docs/frontend/v1.2-final-handover.md) | v1.2 发布、代码审查、启动入口及当时的验证边界 |
 | [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md) / [维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md) | 发布后维护修复、测试证据和版本交付记录 |
 | [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md) | GitHub 提交时间按中国标准时间展示及回归验证 |
 | [v1.6.3 版本说明](docs/frontend/v1.6.3-release.md) | 邮件正文生成时间和收件人配置说明 |

@@ -62,8 +62,9 @@ def test_email_sections_separate_summary_platforms_and_record_metadata(records):
     assert "飞书｜任务与工作消息" in email
     assert '<strong>fix bug</strong>' in email
     assert "acme/repo · 2026-09-25 18:00:00（中国标准时间，UTC+08:00） · +0 / −0 · 0 个文件" in email
-    assert '<strong>Ship</strong>' in email and "状态：done · 2026-09-25 10:00 UTC" in email
-    assert '<strong>日报完成</strong>' in email and "时间：2026-09-25 10:00 UTC" in email
+    china_time = "2026-09-25 18:00:00（中国标准时间，UTC+08:00）"
+    assert '<strong>Ship</strong>' in email and f"状态：done · {china_time}" in email
+    assert '<strong>日报完成</strong>' in email and f"时间：{china_time}" in email
 
 
 def test_email_shows_china_generation_time_to_distinguish_regenerations(records):
@@ -75,6 +76,23 @@ def test_email_shows_china_generation_time_to_distinguish_regenerations(records)
 
     assert "生成时间：2026-10-13 21:00:00（中国标准时间，UTC+08:00）" in html
     assert "数据获取失败，数量未知" in html
+
+
+def test_email_preserves_chat_name_as_safe_literal_text(records):
+    from dataclasses import replace
+    from html.parser import HTMLParser
+    class VisibleText(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts = []
+        def handle_data(self, data): self.parts.append(data)
+    chat_name = '研发 & <测试>群'
+    member = MemberReport("u1", "Member", messages=[replace(records["message"], chat_name=chat_name)])
+    report = generate_daily_report(date(2026, 9, 25), "team", [member], {}, records["message"].sent_at)
+    visible = VisibleText()
+    visible.feed(report.html)
+    assert chat_name in ''.join(visible.parts)
+    assert '<测试>' not in report.html, "Group labels must stay text rather than HTML markup"
 
 
 def test_single_member_report_avoids_repeated_identity_and_prioritizes_summary(records):

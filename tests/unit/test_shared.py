@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from smart_daily_report.shared.calendar import is_workday
 from smart_daily_report.shared.config import load_config, validate_identity_mappings
 from smart_daily_report.shared.errors import ConfigError
 from smart_daily_report.shared.identity import filter_sensitive_messages, map_records_to_members
@@ -22,6 +21,22 @@ def test_config_loads_mapping_and_secrets_from_env(tmp_path):
     config = load_config(path, {"GH_TOKEN": "secret"})
     assert config.github_token == "secret"
     assert config.members[0].lark_user_ids == ["ou1"]
+
+
+@pytest.mark.parametrize("section,key", [
+    ("team", "github_repositories"), ("team", "lark_project_ids"), ("team", "lark_chat_ids"),
+    ("team", "report_keywords"), ("team", "sensitive_keywords"),
+    ("member", "github_logins"), ("member", "lark_user_ids"), ("member", "github_author_names"),
+])
+@pytest.mark.parametrize("value", ["whole-value", [123], [" "]])
+def test_config_rejects_malformed_lists_before_collection_or_privacy_filtering(tmp_path, section, key, value):
+    raw = {"team": {"name": "team", "timezone": "UTC"}, "members": [{"member_id": "m", "display_name": "Member"}]}
+    target = raw["team"] if section == "team" else raw["members"][0]
+    target[key] = value
+    path = tmp_path / "bad-list.yaml"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ConfigError, match=key):
+        load_config(path, {})
 
 
 def test_config_rejects_invalid_timezone_and_mapping(tmp_path):
@@ -57,12 +72,6 @@ def test_duplicate_github_author_name_mapping_fails(config):
     config.members.append(MemberConfig("u2", "李四", [], [], ["GAOCHANG0339-WEB"]))
     with pytest.raises(ConfigError):
         validate_identity_mappings(config)
-
-
-def test_workday_skips_weekends_and_holidays():
-    assert not is_workday(date(2026, 9, 26), set())
-    assert not is_workday(date(2026, 9, 25), {date(2026, 9, 25)})
-    assert is_workday(date(2026, 9, 25), set())
 
 
 def test_sensitive_message_is_removed_before_member_grouping(config, records):
@@ -140,6 +149,26 @@ def test_sqlite_round_trip_and_idempotent_replace(tmp_path, records, statuses):
     saved = get_report(path, report.report_date)
     assert saved.markdown == report.markdown
     assert get_report(path, date(2026, 9, 24)) is None
+
+
+def test_report_storage_releases_connections_for_windows_file_operations(tmp_path, records, statuses, monkeypatch):
+    import sqlite3
+    from smart_daily_report.shared.models import MemberReport
+    connections = []
+    connect = sqlite3.connect
+    def capture(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+    monkeypatch.setattr("smart_daily_report.shared.storage.sqlite3.connect", capture)
+    report = generate_daily_report(date(2026, 9, 25), "team", [MemberReport("u1", "Member")], statuses, records["commit"].committed_at)
+    path = tmp_path / "reports.sqlite3"
+    write_report(path, report)
+    assert get_report(path, report.report_date) is not None
+    assert len(connections) == 2
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connection.execute("SELECT 1")
 
 
 def test_storage_does_not_store_secret_when_message_filtered(config, records, tmp_path):
