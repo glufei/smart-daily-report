@@ -85,6 +85,15 @@ test('disabled_failure_and_zero_records_are_distinct', async () => {
   expect(member.getByText('未启用')).toBeInTheDocument(); expect(member.getByText('数据获取失败')).toBeInTheDocument();
 });
 
+test('lark_access_policy_denial_shows_admin_action_and_trace_log_location', async () => {
+  const operation = operationFixture('partial_failure');
+  operation.sources.lark_tasks = { status: 'failure', error_code: 'source_access_policy_denied' } as any;
+  const fetchMock = vi.fn().mockResolvedValueOnce(response(operation)).mockResolvedValue(response(previewFixture()));
+  setup(fetchMock);
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  expect(screen.getByText('飞书访问策略拒绝（21001）。请管理员依据后端日志中的请求追踪 ID 联系飞书开放平台排查。')).toBeInTheDocument();
+});
+
 test('legacy_preview_does_not_claim_current_source_enablement', async () => {
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValue(response({ ...previewFixture(), sources: null })); setup(fetchMock);
   await screen.findByText('来源启用情况未记录');

@@ -79,7 +79,7 @@ def run_report(config: RunConfig, report_date: date, dry_run: bool = False,
         for result in results:
             logger.info("collection_finished", extra={"run_id": run_id, "source": result.source,
                         "status": result.status, "record_count": len(result.records), "attempt": result.attempts,
-                        "error_code": result.error_code})
+                        "error_code": result.error_code, "diagnostic_id": result.diagnostic_id})
         source_results = {result.source: result for result in results if enabled[result.source]}
         if all(result.status == "failure" for result in source_results.values()):
             logger.error("all_sources_failed", extra={"run_id": run_id, "status": "failure"})

@@ -3,7 +3,7 @@ import { reportSchema } from './api';
 
 const id = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 const revision = z.string().regex(/^[0-9a-f]{64}$/);
-const errorCode = z.enum(['non_workday', 'all_sources_failed', 'source_auth_failed', 'source_unavailable',
+const errorCode = z.enum(['non_workday', 'all_sources_failed', 'source_auth_failed', 'source_access_policy_denied', 'source_unavailable',
   'source_payload_invalid', 'report_write_failed', 'delivery_rejected', 'delivery_partial', 'delivery_unknown', 'operation_interrupted', 'internal_error']).nullable();
 const source = z.strictObject({ status: z.enum(['pending', 'success', 'failure', 'disabled']), error_code: errorCode });
 const sources = z.strictObject({ github_commits: source.nullable(), lark_tasks: source.nullable(), lark_messages: source.nullable() });

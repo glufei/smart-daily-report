@@ -42,7 +42,7 @@ def test_email_subject_identifies_author_and_report_date():
     result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, None, None, "from@test", []), CapturingSMTP)
 
     assert result.success
-    assert subjects == ["高畅智能日报（2026-09-25 18:00版）"]
+    assert subjects == ["高畅智能日报（2026-09-25）"]
 
 
 def test_email_subject_distinguishes_two_generations_on_same_date():
@@ -58,8 +58,8 @@ def test_email_subject_distinguishes_two_generations_on_same_date():
         snapshot = replace(report(), generated_at=datetime(2026, 9, 25, hour, tzinfo=timezone.utc))
         result = send_email(snapshot, ["mentor@test", "senior@test"], smtp, CapturingSMTP)
         assert result.success
-    assert subjects == ["高畅智能日报（2026-09-25 20:00版）",
-                        "高畅智能日报（2026-09-25 21:00版）"]
+    assert subjects == ["高畅智能日报（2026-09-25）",
+                        "高畅智能日报（2026-09-25）"]
 
 
 def test_email_uses_implicit_ssl_when_configured(monkeypatch):

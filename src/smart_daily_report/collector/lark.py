@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import httpx
 
-from ..shared.http import TokenProvider, request_with_retry
+from ..shared.http import TokenAPIError, TokenProvider, request_with_retry, response_diagnostic_id
 from ..shared.models import CollectResult, CollectionWindow, MessageRecord, TaskRecord
 
 
@@ -35,8 +35,10 @@ def _get_lark(client, provider, base_url, path, sleep=None, params=None):
     while True:
         try:
             token = provider.get()
+        except TokenAPIError as exc:
+            return None, attempts + 1, f"lark_{exc.code}", exc.diagnostic_id
         except Exception:
-            return None, attempts + 1, "token_refresh_failed"
+            return None, attempts + 1, "token_refresh_failed", None
         request_args = {"params": params, "headers": {"Authorization": f"Bearer {token}"}, "timeout": 10}
         response, used, error = request_with_retry(client, "GET", base_url.rstrip("/") + "/" + path.lstrip("/"), **request_args) if sleep is None else request_with_retry(client, "GET", base_url.rstrip("/") + "/" + path.lstrip("/"), sleep=sleep, **request_args)
         attempts += used
@@ -44,27 +46,31 @@ def _get_lark(client, provider, base_url, path, sleep=None, params=None):
             refreshed = True
             try:
                 provider.get(refresh=True)
+            except TokenAPIError as exc:
+                return None, attempts + 1, f"lark_{exc.code}", exc.diagnostic_id
             except Exception:
-                return None, attempts + 1, "token_refresh_failed"
+                return None, attempts + 1, "token_refresh_failed", None
             continue
         if error or response is None or response.is_error:
-            return None, attempts, error or f"http_{response.status_code if response else 'unknown'}"
+            return None, attempts, error or f"http_{response.status_code if response else 'unknown'}", response_diagnostic_id(response) if response else None
         try:
             payload = response.json()
             if not isinstance(payload, dict) or type(payload.get("code")) is not int:
-                return None, attempts, "invalid_payload"
+                return None, attempts, "invalid_payload", None
             if payload["code"] != 0:
                 if payload.get("code") in (99991663, 99991664) and not refreshed:
                     refreshed = True
                     try:
                         provider.get(refresh=True)
+                    except TokenAPIError as exc:
+                        return None, attempts + 1, f"lark_{exc.code}", exc.diagnostic_id
                     except Exception:
-                        return None, attempts + 1, "token_refresh_failed"
+                        return None, attempts + 1, "token_refresh_failed", None
                     continue
-                return None, attempts, f"lark_{payload.get('code')}"
-            return payload, attempts, None
+                return None, attempts, f"lark_{payload.get('code')}", response_diagnostic_id(response)
+            return payload, attempts, None, None
         except (ValueError, AttributeError):
-            return None, attempts, "invalid_payload"
+            return None, attempts, "invalid_payload", None
 
 
 def collect_tasks(client: httpx.Client, project_ids: Sequence[str], window: CollectionWindow,
@@ -79,10 +85,10 @@ def collect_tasks(client: httpx.Client, project_ids: Sequence[str], window: Coll
             params = {"page_size": "100", "completed": "true", "user_id_type": "open_id"}
             if token:
                 params["page_token"] = token
-            payload, attempts, error = _get_lark(client, token_provider, api_base_url, path.replace("{tasklist_guid}", quote(project_id, safe="")), sleep, params)
+            payload, attempts, error, diagnostic_id = _get_lark(client, token_provider, api_base_url, path.replace("{tasklist_guid}", quote(project_id, safe="")), sleep, params)
             attempts_total += attempts
             if error:
-                return CollectResult("lark_tasks", "failure", error_code=error, message="Feishu task collection failed", attempts=max(1, attempts_total))
+                return CollectResult("lark_tasks", "failure", error_code=error, message="Feishu task collection failed", attempts=max(1, attempts_total), diagnostic_id=diagnostic_id)
             try:
                 data = payload["data"]
                 items = data["items"]
@@ -157,10 +163,10 @@ def collect_messages(client: httpx.Client, chat_ids: Sequence[str], window: Coll
                       "start_time": str(int(window.start.timestamp())), "end_time": str(int(window.end.timestamp())), "page_size": "50"}
             if page_token:
                 params["page_token"] = page_token
-            payload, used, error = _get_lark(client, token_provider, api_base_url, path, sleep, params)
+            payload, used, error, diagnostic_id = _get_lark(client, token_provider, api_base_url, path, sleep, params)
             attempts_total += used
             if error:
-                return CollectResult("lark_messages", "failure", error_code=error, message="Feishu message collection failed", attempts=max(1, attempts_total))
+                return CollectResult("lark_messages", "failure", error_code=error, message="Feishu message collection failed", attempts=max(1, attempts_total), diagnostic_id=diagnostic_id)
             try:
                 items, page_token = _data_items(payload)
                 for item in items:

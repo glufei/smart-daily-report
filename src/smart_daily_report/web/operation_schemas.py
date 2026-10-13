@@ -58,7 +58,7 @@ class DeliveryRequest(GenerationRequest):
 
 
 SafeErrorCode = Literal[
-    "non_workday", "all_sources_failed", "source_auth_failed", "source_unavailable",
+    "non_workday", "all_sources_failed", "source_auth_failed", "source_access_policy_denied", "source_unavailable",
     "source_payload_invalid", "report_write_failed", "delivery_rejected",
     "delivery_partial", "delivery_unknown", "operation_interrupted", "internal_error",
 ]

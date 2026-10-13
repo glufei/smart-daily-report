@@ -83,6 +83,7 @@ class CollectResult(Generic[T]):
     error_code: str | None = None
     message: str | None = None
     attempts: int = 1
+    diagnostic_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.attempts < 1:

@@ -218,6 +218,22 @@ def test_lark_token_provider_failure_is_reported():
     assert tasks.error_code == "token_refresh_failed" and messages.error_code == "token_refresh_failed"
 
 
+def test_lark_token_policy_denial_preserves_safe_code_and_trace_id():
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(
+        200, headers={"x-tt-logid": "20261013ABCDEF"},
+        json={"code": 21001, "msg": "private upstream detail"},
+    )))
+    provider = TokenProvider(client, "https://lark", "/token", "app", "secret")
+    window = CollectionWindow(datetime.now(timezone.utc), datetime.now(timezone.utc))
+
+    result = collect_tasks(client, ["list"], window, provider, "https://lark", "/tasks")
+
+    assert result.status == "failure"
+    assert result.error_code == "lark_21001"
+    assert result.diagnostic_id == "20261013ABCDEF"
+    assert result.message == "Feishu task collection failed"
+
+
 def test_lark_task_rejects_malformed_payload_and_refreshes_expired_code():
     window = CollectionWindow(datetime(2026, 9, 25, tzinfo=timezone.utc), datetime(2026, 9, 26, tzinfo=timezone.utc))
     malformed = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"code": 0, "data": {"items": [{"updated_time": "not-a-date"}]}})))

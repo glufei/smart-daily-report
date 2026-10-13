@@ -1,8 +1,8 @@
 # 智能日报生成器
 
-从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员先生成确定性的“今日总结”（提交、完成任务、协作消息计数），再分别列出 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。邮件和飞书日报使用“高畅智能日报”品牌标题，网页版使用通用标题“智能日报”；三端均保留日期和成员信息。邮件正文使用最大宽度为 860px 的自适应表格，网页阅读列最大宽度为 1080px，飞书使用 Markdown 分隔线区分来源板块。三个渠道均按概览、GitHub、飞书的顺序展示；历史日报按其保存内容展示，不会自动重算。
+从 **GitHub 提交、飞书已完成任务和飞书群消息**中收集工作记录，按成员生成可核对的今日概览，再分开展示 **GitHub｜代码提交** 和 **飞书｜任务与工作消息**，保存到 SQLite，并按需发送邮件和飞书通知。邮件和飞书日报使用配置的品牌标题，网页版使用通用标题；三个渠道均保留日期和成员信息，并按概览、GitHub、飞书的顺序展示。历史日报按其保存内容展示，不会自动重算。
 
-当前版本：**v1.6.3（同日多版邮件可辨认）**。前端使用 React，后端使用 FastAPI；日报总结只按采集记录和来源状态确定性统计，不调用模型或改写源内容。网页与邮件中的 GitHub 提交时间统一显示为 Asia/Shanghai（UTC+08:00），原始时间点不变。邮件主题带本次生成的北京时间，正文也标明生成时间。详见 [v1.6.3 版本说明](docs/frontend/v1.6.3-release.md)和 [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)。
+当前版本：**v1.6.4**。前端使用 React，后端使用 FastAPI；日报内容只按采集记录和来源状态确定性统计，不调用模型或改写源内容。网页与邮件中的 GitHub 提交时间统一显示为 Asia/Shanghai（UTC+08:00），原始时间点不变。飞书访问策略拒绝会显示明确错误并记录平台请求追踪 ID，便于管理员排查。详见 [v1.6.4 版本说明](docs/frontend/v1.6.4-release.md)。
 
 v1.6.2 保持 v1.6.1 的渠道标题规则，并将网页和邮件中的 GitHub 提交时间统一转换为中国标准时间，标注 UTC+08:00。时间戳仍表示 GitHub 提交发生的同一时刻，仅改变展示时区。详见 [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md)。
 
@@ -10,25 +10,22 @@ v1.6.2 保持 v1.6.1 的渠道标题规则，并将网页和邮件中的 GitHub 
 
 | 你的情况 | 从哪里开始 |
 | --- | --- |
-| 在作者当前电脑上，配置和依赖已经准备好了 | [一、当前电脑直接启动](#一当前电脑直接启动) |
+| 已配置好凭证和依赖，直接运行项目 | [一、已配置环境启动](#一已配置环境启动) |
 | 第一次下载项目，想先看看页面 | [二、首次安装](#二首次安装) → [三、演示模式](#三演示模式无需外部账号) |
 | 第一次下载项目，要连接自己的 GitHub / 飞书 / 邮箱 | [二、首次安装](#二首次安装) → [四、配置并启动真实模式](#四配置并启动真实模式) |
 | 只查看已有日报，不采集或发送 | [五、只读模式与命令行](#五只读模式与命令行) |
 
 **下面的命令使用 Windows PowerShell。** 后端和前端分别占用一个终端窗口，启动后保持两个窗口运行。若页面已经能打开、服务也正常运行，可以直接使用，不必重复启动。
 
-## 一、当前电脑直接启动
+## 一、已配置环境启动
 
-这部分适用于作者已经配置好的电脑。**真实配置和历史数据库保留在 `E:\worktrees\v1-2-real-integration\smart-daily-report`**，Python 环境位于 `E:\MyCode\smart-daily-report\.runtime\venv`。v1.3.1 合并后，项目代码位于 `E:\MyCode\smart-daily-report`；下面后端在原配置目录运行，通过 PYTHONPATH 读取合并后的代码，前端也从该代码目录启动。首次克隆者使用第四节，不能照抄作者私有目录。
+适用于已准备好配置文件、凭证和依赖的项目副本。分别打开两个 PowerShell 窗口，并先在每个窗口进入项目根目录。
 
 ### 1. 窗口 A：启动真实后端
 
 打开一个 PowerShell 窗口，完整执行以下代码。它会加载该目录的 `.env`，然后启动 API；不会显示密钥。
 
 ```powershell
-Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report'
-$env:PYTHONPATH = 'E:\MyCode\smart-daily-report\src'
-
 Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
     $entry = $_.Trim()
     if ($entry -and -not $entry.StartsWith('#')) {
@@ -42,7 +39,7 @@ Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
     }
 }
 
-& 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe' -m smart_daily_report.web.main --config '.\config.yaml' --port 8000
+.\.runtime\venv\Scripts\python.exe -m smart_daily_report.web.main --config '.\config.yaml' --port 8000
 ```
 
 看到 `Uvicorn running on http://127.0.0.1:8000` 就表示后端已启动。终端停在这里等待请求是正常现象，不要关闭窗口。
@@ -52,7 +49,7 @@ Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
 再打开一个 PowerShell 窗口，执行：
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report\frontend'
+Set-Location 'frontend'
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
@@ -80,9 +77,9 @@ npm run dev
 5. 点击「推送日报」，逐项核对弹窗中的日期、版本、邮箱地址与飞书目标。点击「取消」不发送；点击「确认推送」才提交。
 6. 查看“推送执行结果”中的本次邮箱和渠道状态。「服务商已受理」表示 SMTP 已接受，仍需检查实际收件箱；Gmail 找不到时检查垃圾邮件，找到后点击“不是垃圾邮件”，可为可信发件人设置“从不发送至垃圾邮件”过滤器。
 
-邮件主题格式为 **“高畅智能日报（日期 北京时间版）”**，例如“高畅智能日报（2026-10-13 20:00版）”。同一天重新采集生成后，21:00 的邮件会以新的生成时间标为“21:00版”；正文也标明该次生成时间。时间标签只是区分实际生成的快照，**不代表两版内容一定发生变化**。如老师要求第二版有改进，请在两次生成之间完成真实的代码、任务或说明改进，21:00 重新采集并检查内容差异后再发送。
+邮件主题使用项目配置的日报名称和报告日期；正文包含报告日期及生成时间。每次发送前都应重新预览并核对内容，确认收件人和推送渠道后再提交。
 
-同日两次给老师和师兄发送时，先在私有 `config.yaml` 的 `team.smtp.recipients` 加入两人的邮箱并重启真实后端。20:00 和 21:00 各执行一次“采集并生成 → 预览日报 → 勾选邮件及两位收件人 → 核对弹窗 → 确认推送”。邮箱勾选不会跨次保留；第二次须重新勾选。飞书来源若显示“数据获取失败”，该项数量为未知，不能把它当作 0；请在发送前核对预览。项目不会自动在整点发送邮件。
+收件人保存在本地私有配置中；要增加或移除收件人，请编辑配置并重启后端。邮箱选择不会跨次保留，每次推送前都需重新勾选。飞书来源若显示“数据获取失败”，该项数量为未知，不能把它当作 0；请在发送前核对预览。项目不会自动发送邮件。
 
 **邮件可以主动再次发送同一日报。** 每次重新选择收件人并独立确认都会产生一个新请求，可能产生重复邮件；系统不按收件人去重。飞书同一版本已受理、部分受理或结果未知时继续禁用再次发送。
 
@@ -90,40 +87,31 @@ npm run dev
 
 “查询执行结果”和“预览日报”都会就近显示加载、完成或失败提示。查询完成会更新“本次查询时间”，即使结果没有变化；令牌验证、生成/推送请求及预览等待超过10秒会明确提示并释放页面忙碌状态，后台任务不会因此取消。若生成/推送请求超时，先点“查询执行结果”核对原请求；系统保留原幂等键，绝不自动再次提交。
 
-本机已有以下真实日报，可先选择这些日期查看：
-
-| 日期 | 可查看的内容 |
-| --- | --- |
-| 2026-04-23 | GitHub 提交 |
-| 2026-10-01 | 飞书完成任务 |
-| 2026-10-05 | 飞书工作进展消息 |
-
-这些数据只保存在作者本机，首次克隆不会包含它们。10 月 1 日的日报已经推送并确认收到，无需为查看页面再次发送。
-
 ### 4. 停止项目
 
 分别回到窗口 A、窗口 B，按 **Ctrl+C**。下次启动时重复步骤 1、2 即可；已经安装的依赖不必每次重装。
 
 ## 二、首次安装
 
-适用于第一次运行的新环境。已有依赖和配置的作者本机可跳过本节。
+适用于第一次运行的新环境。已安装依赖且已有配置的环境可跳过本节。
 
 需要 Git、Python **≥3.11**、Node.js **`^22.12.0 || ^24.0.0 || >=26.0.0`**。v1.2.0 已在 Python 3.12.14、Node 24.15.0、npm 11.12.1 上验证。
 
-先克隆仓库，或者直接进入你已经下载的项目根目录。以下以 `E:\MyCode\smart-daily-report` 为例；**使用自己的路径时，后续命令中的目录也要一起替换**。
+先克隆仓库，或者直接进入你已经下载的项目根目录。下方命令从项目根目录运行。
 
 ```powershell
-git clone https://github.com/glufei/smart-daily-report.git 'E:\MyCode\smart-daily-report'
-Set-Location 'E:\MyCode\smart-daily-report'
+git clone https://github.com/glufei/smart-daily-report.git
+Set-Location '.\smart-daily-report'
 
 py -3.12 -m venv .runtime\venv
 .\.runtime\venv\Scripts\python.exe -m pip install -e '.[dev,web]'
 
 Set-Location frontend
 npm ci
+Set-Location '..'
 ```
 
-已经克隆过项目时不要再次执行 `git clone`。若没有 `py` 命令，用已安装 Python 的路径替换创建环境那一行，例如 `& 'C:\Python312\python.exe' -m venv .runtime\venv`；实际路径以你的安装位置为准。后续固定使用 `.runtime\venv\Scripts\python.exe`。
+安装完成后回到项目根目录再按下文打开两个终端；后端命令从项目根目录运行，前端命令从 `frontend` 目录运行。已经克隆过项目时不要再次执行 `git clone`。若没有 `py` 命令，用已安装 Python 的路径替换创建环境那一行，例如 `& 'C:\Python312\python.exe' -m venv .runtime\venv`；实际路径以你的安装位置为准。后续固定使用 `.runtime\venv\Scripts\python.exe`。
 
 安装完后，选择演示模式或真实模式，二者不需要同时启动。
 
@@ -134,7 +122,6 @@ npm ci
 **窗口 A：**
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report'
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 .\.runtime\venv\Scripts\python.exe frontend/e2e/serve_fixture.py --port 8000
 ```
@@ -142,7 +129,7 @@ $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 **窗口 B：**
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report\frontend'
+Set-Location 'frontend'
 $env:VITE_API_MODE = 'readonly'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
@@ -154,14 +141,13 @@ npm run dev
 
 ## 四、配置并启动真实模式
 
-本节适用于新环境。作者当前电脑的配置已完成，可直接使用第一节。
+本节适用于新环境。已准备好凭证和依赖的环境可直接使用第一节。
 
 ### 1. 准备配置文件和凭证
 
 在项目根目录执行一次；若已有 `config.yaml`，保留现有文件，不覆盖：
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report'
 if (-not (Test-Path -LiteralPath 'config.yaml')) {
     Copy-Item -LiteralPath 'config.yaml.example' -Destination 'config.yaml'
 }
@@ -207,7 +193,6 @@ DAILY_REPORT_SMTP_PASSWORD=替换为邮箱SMTP授权码
 程序**不会自动读取 `.env`**。在同一个 PowerShell 窗口完整执行：
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report'
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 
 Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
@@ -229,7 +214,7 @@ Get-Content -LiteralPath '.env' -Encoding UTF8 | ForEach-Object {
 ### 3. 窗口 B：启动操作页面
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report\frontend'
+Set-Location 'frontend'
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
@@ -246,7 +231,6 @@ npm run dev
 停止现有后端，启动以下服务；数据库路径应与真实配置中的 `team.database_path` 一致，且数据库已经存在：
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report'
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 .\.runtime\venv\Scripts\python.exe -m smart_daily_report.web.main --database '.\data\reports.sqlite3'
 ```
@@ -284,7 +268,7 @@ $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 | 8000 / 5173 端口被占用 | 已有本项目服务时直接使用；需要切模式时先在原终端 Ctrl+C，不重复启动 |
 | 页面无法连接日报服务 | 确认窗口 A 已启动，前端 API 地址与后端端口一致；使用 `127.0.0.1`，不要换成 `localhost` |
 | 没有生成或推送控件 | 前端可能是只读模式；设置 `VITE_API_MODE='operations'` 后重启，并配合后端 `--config` |
-| 找不到 `.env` / `config.yaml` | 确认启动目录；首次克隆不包含私有配置，作者已配置文件位于第一节工作区 |
+| 找不到 `.env` / `config.yaml` | 确认启动目录；首次克隆不包含私有配置，按第四节创建并填写 |
 | 操作令牌无效 | 输入 `DAILY_REPORT_WEB_TOKEN` 的实际值；修改文件后重新加载、重启后端并验证 |
 | 该日期尚无日报 | 只读查询不会生成；选择已保存日期，或在真实操作模式先生成 |
 | 今日无记录 / 数据获取失败 | 前者表示该来源读取成功但没有符合规则的记录；后者需核对权限、配置和网络 |
@@ -297,14 +281,13 @@ $env:PYTHONPATH = Join-Path (Get-Location) 'src'
 后端测试：
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report'
 .\.runtime\venv\Scripts\python.exe -m pytest -q
 ```
 
 前端检查：
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report\frontend'
+Set-Location 'frontend'
 npm run typecheck
 npm run test -- --run --coverage
 npm run build
@@ -319,12 +302,13 @@ npm run build
 | [最终交付说明](docs/frontend/v1.2-final-handover.md) | 发布版本、最终代码审查、最新测试、启动入口及已知限制 |
 | [v1.3.1 版本说明](docs/frontend/v1.3.1-release.md) / [维护验证记录](docs/frontend/v1.3.1-maintenance-tdd.md) | 发布后维护修复、测试证据和版本交付记录 |
 | [v1.6.2 版本说明](docs/frontend/v1.6.2-release.md) | GitHub 提交时间按中国标准时间展示及回归验证 |
-| [v1.6.3 版本说明](docs/frontend/v1.6.3-release.md) | 同日多版邮件主题、正文生成时间和收件人配置说明 |
+| [v1.6.3 版本说明](docs/frontend/v1.6.3-release.md) | 邮件正文生成时间和收件人配置说明 |
 | [v1.6.1 版本说明](docs/frontend/v1.6.1-release.md) | 网页使用通用标题，邮件和飞书保留个人品牌 |
 | [v1.6.0 版本说明](docs/frontend/v1.6.0-release.md) | 邮件、网页和飞书品牌/分区样式统一及全量回归 |
 | [v1.5.0 版本说明](docs/frontend/v1.5.0-release.md) / [Task27 验收记录](docs/frontend/report-layout-timezone-tdd.md) | v1.5.0 发布版的变更、测试边界、来源分组和时区验收 |
 | [需求规范](specs/proposal.md) / [架构设计](specs/design.md) / [任务清单](specs/tasks.md) | SDD 的需求、技术方案、任务依赖和验收标准 |
-| [本机运行说明](docs/frontend/local-run.md) | 模式切换、构建预览、测试命令及本机路径 |
+| [本地运行说明](docs/frontend/local-run.md) | 模式切换、构建预览和测试命令 |
+| [飞书 21001 排查说明](docs/frontend/feishu-access-policy-21001.md) | 访问策略拒绝的阶段、日志追踪 ID 和管理员排查建议 |
 | [配置指南](docs/frontend/v1.2-configuration-163-feishu.md) | 163 SMTP、GitHub、飞书凭证与配置示例 |
 | [v1.2 验收](docs/frontend/v1.2-acceptance.md) / [完成情况审查](docs/frontend/v1.2-completion-audit.md) | 真实源数据、页面、实际收件及未在线验证的边界 |
 | [TDD 记录](docs/frontend/v1.2-tdd-log.md) / [版本说明](docs/frontend/v1.2-release.md) | 先失败后实现的证据与发布内容 |

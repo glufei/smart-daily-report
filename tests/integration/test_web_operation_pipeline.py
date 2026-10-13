@@ -132,6 +132,31 @@ def test_one_source_failure_keeps_other_sources(config,tmp_path):
     assert (tmp_path/'reports.sqlite3').exists()
 
 
+def test_lark_policy_denial_has_actionable_safe_operation_code(config, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger='smart_daily_report')
+    config = replace(config, github_repositories=[], lark_project_ids=['list-1'],
+                     lark_app_id='app', lark_app_secret='secret')
+    def handler(request):
+        if request.method == 'POST':
+            return httpx.Response(200, headers={'x-tt-logid': 'trace_21001'},
+                                  json={'code': 21001, 'msg': 'private upstream detail'})
+        if request.url.path.endswith('/tasks'):
+            raise AssertionError('The task API must not run when token issuance is denied')
+        return httpx.Response(403)
+    service, store, _ = make_service(config, tmp_path, handler)
+    accepted = service.accept_generation(GenerationRequest(report_date=date(2026, 9, 25)), str(uuid4()))
+    service.execute(accepted.view.operation_id)
+    result = store.get(accepted.view.operation_id)
+    assert result['status'] == 'failed'
+    assert result['sources']['lark_tasks'] == {'status': 'failure', 'error_code': 'source_access_policy_denied'}
+    assert result['error_code'] == 'all_sources_failed'
+    task_log = next(record for record in caplog.records
+                    if record.getMessage() == 'collection_finished' and getattr(record, 'source', None) == 'lark_tasks')
+    assert task_log.diagnostic_id == 'trace_21001'
+    assert 'private upstream detail' not in task_log.getMessage()
+
+
 def test_worker_exception_records_safe_terminal_result_and_releases_slot(config,tmp_path):
     import json
     service,store,cfg=make_service(config,tmp_path)

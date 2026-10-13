@@ -76,7 +76,8 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       work.current.timer = setTimeout(poll, 2000); return;
     }
     pending.current = null;
-    const texts = { succeeded: '日报生成完成，推送需单独确认', partial_failure: '部分数据源获取失败，请核对预览',
+    const texts = { succeeded: '日报生成完成，推送需单独确认', partial_failure: value.sources && Object.values(value.sources).some(source => source?.error_code === 'source_access_policy_denied')
+        ? '飞书访问策略拒绝（21001）。请管理员依据后端日志中的请求追踪 ID 联系飞书开放平台排查。' : '部分数据源获取失败，请核对预览',
       failed: '日报生成失败', skipped: '该日期为非工作日，已跳过', unknown: '执行结果尚未确认', interrupted: '操作已中断，未自动重试' };
     const deliveryTexts = { succeeded: '所选渠道已受理，请核对实际收件', partial_failure: '部分渠道受理失败，请核对渠道结果',
       failed: '所选渠道明确拒绝，可核对后仅重试失败渠道', skipped: '该日期为非工作日，已跳过',

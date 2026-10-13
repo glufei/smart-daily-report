@@ -4,7 +4,6 @@ import smtplib
 import time
 from email.message import EmailMessage
 from typing import Callable, Sequence
-from zoneinfo import ZoneInfo
 
 from ..shared.models import DailyReport, DeliveryResult, SmtpConfig
 
@@ -12,8 +11,7 @@ from ..shared.models import DailyReport, DeliveryResult, SmtpConfig
 def send_email(report: DailyReport, recipients: Sequence[str], smtp_config: SmtpConfig,
                smtp_factory=smtplib.SMTP, sleep: Callable[[float], None] = time.sleep) -> DeliveryResult:
     message = EmailMessage()
-    generated_local = report.generated_at.astimezone(ZoneInfo("Asia/Shanghai"))
-    message["Subject"] = f"高畅智能日报（{report.report_date.isoformat()} {generated_local:%H:%M}版）"
+    message["Subject"] = f"高畅智能日报（{report.report_date.isoformat()}）"
     message["From"] = smtp_config.sender
     message["To"] = ", ".join(recipients)
     message.set_content("请使用支持 HTML 的邮件客户端查看日报。")

@@ -36,6 +36,22 @@ def test_token_provider_fetches_and_refreshes():
     assert len(calls) == 2
 
 
+def test_token_provider_surfaces_application_error_without_upstream_message():
+    from smart_daily_report.shared.http import TokenAPIError
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(
+        200, headers={"x-tt-logid": "trace_123"},
+        json={"code": 21001, "msg": "private upstream detail"},
+    )))
+    provider = TokenProvider(client, "https://lark", "/token", "id", "secret")
+
+    with pytest.raises(TokenAPIError) as error:
+        provider.get()
+
+    assert error.value.code == 21001
+    assert error.value.diagnostic_id == "trace_123"
+    assert "private upstream detail" not in str(error.value)
+
+
 def test_health_check_passes_without_optional_api_sources(config, monkeypatch):
     class SMTP:
         def __init__(self, *args, **kwargs): pass

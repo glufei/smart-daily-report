@@ -1,9 +1,22 @@
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 
 import httpx
+
+
+class TokenAPIError(Exception):
+    def __init__(self, code: int, diagnostic_id: str | None = None):
+        super().__init__(f"Token API returned error code {code}")
+        self.code = code
+        self.diagnostic_id = diagnostic_id
+
+
+def response_diagnostic_id(response: httpx.Response) -> str | None:
+    value = response.headers.get("x-tt-logid", "")
+    return value if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value) else None
 
 
 def request_with_retry(
@@ -59,6 +72,11 @@ class TokenProvider:
         response = self.client.post(self.url, json={"app_id": self.app_id, "app_secret": self.app_secret}, timeout=10)
         response.raise_for_status()
         payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Token response is invalid")
+        code = payload.get("code")
+        if type(code) is int and code != 0:
+            raise TokenAPIError(code, response_diagnostic_id(response))
         data = payload.get("data", payload)
         token = data.get("tenant_access_token")
         if not token:

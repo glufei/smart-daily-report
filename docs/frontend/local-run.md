@@ -1,6 +1,6 @@
-# 本机日报页面与 API
+# 本地日报页面与 API
 
-当前版本为 v1.6.3。同日多版邮件会以本次生成的北京时间区分；GitHub 提交时间在网页和邮件中均显示为 Asia/Shanghai（UTC+08:00），不改变 GitHub 原始提交时间或内部存储；网页页眉、页脚和浏览器标题使用通用名称“智能日报”。版本变更和验证见 [v1.6.3 版本说明](v1.6.3-release.md)及 [v1.6.2 版本说明](v1.6.2-release.md)。v1.6.1 的网页品牌调整见 [v1.6.1 版本说明](v1.6.1-release.md)；v1.5.0 的每日生成规则、来源分组和时区行为见 [v1.5.0 版本说明](v1.5.0-release.md)及 [Task27 TDD 记录](report-layout-timezone-tdd.md)；v1.4.0 及更早历史发布见对应版本说明。本页前半部分说明只读启动，后半部分说明真实操作和 fixture；操作反馈与邮箱选择改进及本机代码/配置目录分离启动方法见 [本轮验收说明](operation-feedback-email-selection-acceptance.md) 和 README 第一节。首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。历史验收证据保留在各 TDD 记录和 [v1.2 最终交付说明](v1.2-final-handover.md)。
+当前版本为 v1.6.4。GitHub 提交时间在网页和邮件中均显示为 Asia/Shanghai（UTC+08:00），不改变 GitHub 原始提交时间或内部存储；网页使用通用标题。版本变更见 [v1.6.4 版本说明](v1.6.4-release.md)及对应历史版本说明。本页说明只读启动、真实操作和 fixture；首次运行优先按照 [README](../../README.md) 的双窗口步骤。全部请求状态由确定性代码处理；页面不调用模型。真实凭证、配置和日报数据库只保存在本地，不要提交到公开仓库。
 
 ## Python 安装与启动（Windows PowerShell）
 
@@ -9,7 +9,7 @@
 ```powershell
 py -3.12 -m venv .runtime/venv
 .\.runtime\venv\Scripts\python.exe -m pip install -e ".[dev,web]"
-.\.runtime\venv\Scripts\daily-report-web.exe --database "E:\MyCode\smart-daily-report\data\reports.sqlite3"
+.\.runtime\venv\Scripts\daily-report-web.exe --database ".\data\reports.sqlite3"
 ```
 
 只读查询默认将生成时间显示为 UTC。若要按团队当地时间显示，可传入 IANA 时区，例如在上述命令末尾添加 `--timezone 'Asia/Shanghai'`；该选项只影响查询结果的显示偏移，不修改数据库中的 UTC 时间。`--config` 操作模式不接受此参数，直接使用 `team.timezone` 配置。
@@ -18,7 +18,7 @@ py -3.12 -m venv .runtime/venv
 
 将数据库参数替换为实际已生成日报的 SQLite 路径（与生成 CLI 使用的 `team.database_path` 指向同一文件）。相对路径按启动时工作目录解析。查询服务不会读取 `.env` 或配置、不会连接 GitHub/飞书/SMTP，也不会创建缺失的数据库。
 
-本机已核对的历史日期为 **2026-04-23**（只查询日期列）；首次克隆不会包含此数据库。可直接用当前 `.runtime/venv` 启动，无需重新安装。需要虚构示例时复用验收脚本启动：
+首次克隆不会包含本地数据库；需要虚构示例时复用验收脚本启动：
 
 ```powershell
 .\.runtime\venv\Scripts\python.exe frontend/e2e/serve_fixture.py --port 8000
@@ -29,12 +29,12 @@ py -3.12 -m venv .runtime/venv
 默认监听 `127.0.0.1:8000`；端口冲突可使用 `--port 8001`。只读查询示例：
 
 ```powershell
-Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/reports/2026-04-23'
+Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/reports/YYYY-MM-DD'
 ```
 
 正常有日报返回结构化 JSON。`generated_at` 按选定展示区序列化为含偏移的 ISO 8601；缺省 `UTC`。日期非法为 400，无已保存日报为 404，已有库缺表/损坏/读取错误为 500；来源部分失败的历史日报仍为 HTTP 200，并携带对应 `failure` 状态。以上 --database 模式不提供生成或推送操作。
 
-迁移后的原 `.venv` 指向旧的 Python 安装位置，不能运行；本轮保留它，另建 `.runtime/venv`。本机如果没有 `py`，可使用已安装的符合版本要求的 Python 绝对路径执行第一行。本轮实际使用 Codex 提供的 Python 3.12.14 创建此隔离环境。
+如果没有 `py`，可使用已安装的符合版本要求的 Python 绝对路径执行第一行。
 
 ## 测试
 
@@ -42,7 +42,7 @@ Invoke-RestMethod 'http://127.0.0.1:8000/api/v1/reports/2026-04-23'
 .\.runtime\venv\Scripts\python.exe -m pytest -q
 ```
 
-完整测试需要安装 `dev,web` 两组依赖。不安装 `web` 的基础 CLI 仍可使用，测试包不会自动跳过 Web 测试。v1.2.0 发布时为 286 项通过、覆盖率 95.03%；2026-10-05 最终复核修复健康检查后为 300 项通过、覆盖率 95.28%，无跳过。Starlette 对 httpx TestClient 有一项上游弃用提示，当前契约测试可用；未为消除提示替换项目既有 httpx 客户端。
+完整测试需要安装 `dev,web` 两组依赖。不安装 `web` 的基础 CLI 仍可使用，测试包不会自动跳过 Web 测试。对应版本的测试结果见版本说明。Starlette 对 httpx TestClient 有一项上游弃用提示，当前契约测试可用。
 
 ## React 页面（第二个 PowerShell 窗口）
 
@@ -91,7 +91,7 @@ React 19.3.0、React DOM 19.3.0、Vite 8.3.1、TypeScript 7.0.2、Zod 4.6.5；Vi
 
 ## v1.2 真实操作模式
 
-Task15–17已实现。默认仍为只读；操作模式必须成对启动：后端 `--config`，前端 `VITE_API_MODE=operations`。产品不导入 fixture，不会用预制成功数据替代失败响应。本机已验收配置和历史库保留在隔离工作区 `E:\worktrees\v1-2-real-integration\smart-daily-report`；本机 Python 依赖环境复用 `E:\MyCode\smart-daily-report\.runtime\venv`，因此以下工作区命令明确设置 PYTHONPATH，明确选择工作区代码而非其他已安装副本。
+默认仍为只读；操作模式必须成对启动：后端 `--config`，前端 `VITE_API_MODE=operations`。产品不导入 fixture，不会用预制成功数据替代失败响应。以下命令从项目根目录运行；真实配置与凭证应保存在 Git 忽略的本地文件中。
 
 详细填写步骤见 [163邮箱、GitHub与飞书配置指南](v1.2-configuration-163-feishu.md)。
 
@@ -100,22 +100,21 @@ Task15–17已实现。默认仍为只读；操作模式必须成对启动：后
 在工作区放置被忽略的 config.yaml，按 config.yaml.example 设置真实来源、成员映射、固定目标及凭证环境变量名。现有配置中旧 `lark_task_search_path: /task/v2/tasks/search` 必须迁为 `/task/v2/tasklists/{tasklist_guid}/tasks`；`lark_project_ids` 填已授权 tasklist GUID。任务按 completed_at 和团队时区展示所选日期完成的记录，不代表任意历史状态变更。
 
 ```powershell
-Set-Location 'E:\worktrees\v1-2-real-integration\smart-daily-report'
-$env:PYTHONPATH = 'E:\MyCode\smart-daily-report\src'
+$env:PYTHONPATH = Join-Path (Get-Location) 'src'
 # 将自己保管的 .env 加载到此窗口的进程环境；加载方法见 README。
-& 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe' -m smart_daily_report.web.main --config '.\config.yaml'
+.\.runtime\venv\Scripts\python.exe -m smart_daily_report.web.main --config '.\config.yaml'
 ```
 
 必须注入 `DAILY_REPORT_WEB_TOKEN`（至少32字符、非空白的本项目操作令牌）；按配置注入 `DAILY_REPORT_GITHUB_TOKEN`、`DAILY_REPORT_LARK_APP_ID`、`DAILY_REPORT_LARK_APP_SECRET`、`DAILY_REPORT_LARK_WEBHOOK`、`DAILY_REPORT_SMTP_USERNAME`、`DAILY_REPORT_SMTP_PASSWORD`。实际变量名以 YAML 的 *_env 值为准；不要把值写入命令示例、浏览器 URL 或 VITE_*。程序不自动读取 .env。操作令牌必须通过自己安全保管的环境文件/进程注入，刷新页面后需重新输入。
 
-GitHub公共库可匿名但有限流；私有库需授予当前 PAT 对目标仓库的读取权限。若使用 fine-grained PAT，`Resource owner` 选仓库所有者，`Repository access` 选中每个需要采集的仓库，并只授予 `Contents: Read-only`（Metadata 默认只读）；如组织要求审批，需完成管理员批准。当前日报配置采集 `glufei/Lab-Attendance-System` 与 `glufei/smart-daily-report`。Token 仅放进本机 `.env` 的 `DAILY_REPORT_GITHUB_TOKEN`，不发到聊天；更新 `.env` 后需在同一 PowerShell 后端窗口重新注入环境变量并重启服务。GitHub 返回404时先核对仓库路径及 Token 对私有仓库的可见权限，不要将其当成“零条提交”。[GitHub List commits 权限说明](https://docs.github.com/en/rest/commits/commits)。
+GitHub公共库可匿名但有限流；私有库需授予当前 PAT 对目标仓库的读取权限。若使用 fine-grained PAT，只授予所需仓库的 `Contents: Read-only`（Metadata 默认只读）；如组织要求审批，需完成管理员批准。Token 只保存在本地 `.env`，不要发布到聊天或仓库；更新 `.env` 后重新加载环境变量并重启服务。GitHub 返回404时先核对仓库路径及 Token 对私有仓库的可见权限，不要将其当成“零条提交”。[GitHub List commits 权限说明](https://docs.github.com/en/rest/commits/commits)。
 
-飞书应用须获租户授权、可读目标清单及群消息，机器人须在固定目标群中可用。真实任务接口已确认要求 task:tasklist:read（或 write，本项目只需 read）；读取scope已在真实请求生效；原清单配置误用任务GUID已修正，用户已添加应用为viewer协作者；真实tenant身份清单详情/任务GET200/code0，并生成2026-10-01含1条已完成任务的日报，见 [具体权限步骤及清单链接](feishu-tasklist-permissions.md)。无需发送邮件时可省略/清空 smtp；配置了 smtp 时 host/sender/非空 recipients、1–65535端口和布尔互斥TLS必填；声明登录环境变量时用户名和密码必须成对存在且非空白，不静默转为匿名连接。数据库路径相对于启动工作目录，操作库位于同目录 `<日报库文件名>.operations.sqlite3`；不要删除操作库来“解除重发限制”。
+飞书应用须获租户授权、可读目标清单及群消息，机器人须在固定目标群中可用；权限步骤见 [飞书清单权限说明](feishu-tasklist-permissions.md)。无需发送邮件时可省略或清空 SMTP 配置；配置 SMTP 时，服务器、发件人、收件人及端口必须有效。数据库路径相对于启动工作目录，操作库位于同目录 `<日报库文件名>.operations.sqlite3`；不要删除操作库来解除重发限制。
 
 ### 窗口 B：React 操作页面
 
 ```powershell
-Set-Location 'E:\MyCode\smart-daily-report\frontend'
+Set-Location 'frontend'
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
 npm run dev
@@ -123,7 +122,7 @@ npm run dev
 
 打开 http://127.0.0.1:5173，选择任意有效日期（包括周末及配置节假日），输入本项目操作令牌并点“验证令牌”。空值或全空格点击验证时仅给本地提示并聚焦，不发请求；未验证时“采集并生成”禁用并显示原因。点击“采集并生成”只采集、保存、预览；“查看日报”仅查询历史，“预览日报”取得可确认版本和服务器配置的可选邮箱，并在成功后定位正文。核对来源、日期、内容后选渠道；选择邮件时必须明确勾选至少一位邮箱，默认全部未选。点击“推送日报”，在弹窗中核对日期、版本、具体地址和飞书目标后再确认；取消不会发送。只给导师发送就只勾选导师邮箱，不选自己的邮箱；不需要飞书则取消该渠道。
 
-邮件主题格式为 **“高畅智能日报（日期 北京时间版）”**，例如“高畅智能日报（2026-10-13 20:00版）”；邮件正文会显示本次生成时间。两次发送须分别重新生成并核对内容、收件人，系统不自动整点发送。
+邮件主题使用日报名称和报告日期；邮件正文显示本次生成时间。每次发送前都应核对内容和收件人。
 
 ### 日报内容格式
 
@@ -138,20 +137,20 @@ npm run dev
 ```powershell
 # 窗口 A，在隔离工作区根目录
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
-& 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe' frontend/e2e/serve_operations_fixture.py --port 8775
+.\.runtime\venv\Scripts\python.exe frontend/e2e/serve_operations_fixture.py --port 8775
 # 窗口 B，在该工作区 frontend
 $env:VITE_API_MODE = 'operations'
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:8775'
 npm run dev -- --port 5174
 ```
 
-打开 http://127.0.0.1:5174，示例日期2026-09-25，公开假令牌 `public-e2e-only-token-not-a-real-secret-123456`。这是专用测试服务：真实 FastAPI/SQLite/Collector/Notifier，只有 HTTP/SMTP 外部边界使用替身；不会发送真实通知。固定目录 `.runtime/e2e-operations` 的测试文件会重建，绝不指向真实配置/数据库。5174 Origin仅测试工厂注入，不加入产品白名单。
+打开 http://127.0.0.1:5174，使用 fixture 提供的测试日期和测试令牌。这是专用测试服务：真实 FastAPI/SQLite/Collector/Notifier，只有 HTTP/SMTP 外部边界使用替身；不会发送真实通知。固定目录 `.runtime/e2e-operations` 的测试文件会重建，绝不指向真实配置/数据库。5174 Origin仅测试工厂注入，不加入产品白名单。
 
 自动回归（frontend）：
 
 ```powershell
 $env:PYTHONPATH = Join-Path (Split-Path (Get-Location) -Parent) 'src'
-$env:DAILY_REPORT_PYTHON = 'E:\MyCode\smart-daily-report\.runtime\venv\Scripts\python.exe'
+$env:DAILY_REPORT_PYTHON = (Resolve-Path '.\.runtime\venv\Scripts\python.exe').Path
 # 5173被自己需要保留的服务占用时，可使用产品已允许的4173
 $env:DAILY_REPORT_E2E_PORT = '4173'
 $env:DAILY_REPORT_E2E_SCREENSHOT_DIR = '../docs/frontend/screenshots/v1.2/readonly'
@@ -164,20 +163,7 @@ npm run build
 
 先释放测试用5173/5174/8765/8766/8775端口。测试使用已安装Chrome；报告见 v1.2-acceptance.md。运行截图中的令牌/来源为公开假值，不能当真实平台或实际收件证据。
 
-### 2026-10-03本轮运行和发送状态
-
-真实API8000与React operations5173已恢复，已有10/1非空任务日报保持原版本。用户确认固定版本及双目标后，产品HTTP推送API只提交一次；两渠道accepted且各attempts1，用户已确认两处均收到、内容一致、无重复。另补充4/23真实GitHub2条历史预览，未发送。此段是2026-10-03历史记录：当时同版本邮件和飞书均受整渠道重发保护。本轮邮件主动再次发送规则已替代该邮件限制，飞书规则保持；不要删除操作库。本轮实际确认来自用户对话，未冒充真实浏览器按钮点击，既有浏览器交互回归单独记录。
-
-### 最新检查与使用提示（2026-10-05）
-
-本机真实配置/数据库保留在上述工作区；发布代码通过GitHub分支/PR/main交付，本文工作区命令继续有效。v1.2.0最终286项Python、102项前端及14+26项浏览器测试通过。详见 [完成情况审查](v1.2-completion-audit.md)。修改Python采集/模板代码后，下次使用本文命令重启后端，使进程加载最新实现；启动本身不生成或发送。
-
-输入本项目操作令牌并点击验证后才启用“采集并生成”；空/全空格验证在本地提示并聚焦，无API请求。页脚“查看已保存的团队日报”是说明文字，实际入口是页面上方日期查询控件。
-
-2026-10-05真实工作日消息4条已完成源/SQLite/API/React核对，生成耗时1953ms且发送0次；本机页面可选择2026-04-23查看提交、2026-10-01查看完成任务、2026-10-05查看协作消息。查询旧日报不需要再次发送；主动再次发邮件需要重新选择地址和确认，飞书仍保留同版本限制。不要修改历史日期或删除操作记录库。旧配置的 `team.holidays` 字段继续读取兼容，但不限制生成、预览或推送日期。
-
-
-## 操作改进使用要点（2026-10-11）
+## 操作要点
 
 - 「查询执行结果」提供加载/完成/无记录/错误提示，同时展示服务器更新时间与本次查询时间；「预览日报」完成后定位正文标题。主动 GET 超过10秒提示超时，后台任务仍继续。
 - 邮箱列表只在操作令牌验证后的预览接口返回；初始全部未选，选择邮件且地址为空时按钮禁用并说明原因。默认仅从 config.yaml 的 smtp.recipients 选择，不能在页面添加任意地址。
