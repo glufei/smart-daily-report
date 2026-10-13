@@ -12,5 +12,5 @@ def generate_daily_report(report_date: date, team_name: str, members: Sequence[M
     if source_status and all(value == "failure" for value in source_status.values()):
         raise ValueError("Cannot generate a report when all data sources failed")
     markdown_text = render_markdown(report_date, team_name, members, source_status)
-    html_text = render_html(report_date, team_name, members, source_status)
+    html_text = render_html(report_date, team_name, members, source_status, generated_at=generated_at)
     return DailyReport(report_date, team_name, list(members), dict(source_status), markdown_text, html_text, generated_at)

@@ -89,7 +89,8 @@ def render_markdown(report_date: date, team_name: str, members: Sequence[MemberR
 
 
 def render_html(report_date: date, team_name: str, members: Sequence[MemberReport],
-                source_status: Mapping[str, CollectResultStatus]) -> str:
+                source_status: Mapping[str, CollectResultStatus], *,
+                generated_at: datetime | None = None) -> str:
     multiple_members = len(members) > 1
     body_style = "font-family:Arial,'Microsoft YaHei',sans-serif;font-size:16px;line-height:1.6;color:#243247"
     title_style = "margin:0;font-size:28px;line-height:1.35;color:#17365d"
@@ -106,8 +107,10 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
         f'<p style="{muted_style};margin-bottom:6px">高畅智能日报</p>',
         f'<h1 style="{title_style}">报告日期：{report_date.isoformat()}</h1>',
         f'<p style="{muted_style};margin-top:10px">按成功采集的记录汇总，GitHub 与飞书分区展示。</p>',
-        '</td></tr><tr><td height="14" style="height:14px;font-size:0;line-height:0">&nbsp;</td></tr>',
     ]
+    if generated_at:
+        output.append(f'<p style="{muted_style};margin-top:6px">生成时间：{_format_commit_timestamp(generated_at)}</p>')
+    output.append('</td></tr><tr><td height="14" style="height:14px;font-size:0;line-height:0">&nbsp;</td></tr>')
     for member in members:
         if multiple_members:
             output.extend((

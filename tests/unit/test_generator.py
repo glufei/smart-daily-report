@@ -66,6 +66,17 @@ def test_email_sections_separate_summary_platforms_and_record_metadata(records):
     assert '<strong>日报完成</strong>' in email and "时间：2026-09-25 10:00 UTC" in email
 
 
+def test_email_shows_china_generation_time_to_distinguish_regenerations(records):
+    member = MemberReport("u1", "高畅", [records["commit"]])
+    statuses = {"github_commits": "success", "lark_tasks": "success", "lark_messages": "failure"}
+    generated_at = datetime(2026, 10, 13, 13, 0, tzinfo=timezone.utc)
+    html = generate_daily_report(date(2026, 10, 13), "team", [member], statuses,
+                                 generated_at=generated_at).html
+
+    assert "生成时间：2026-10-13 21:00:00（中国标准时间，UTC+08:00）" in html
+    assert "数据获取失败，数量未知" in html
+
+
 def test_single_member_report_avoids_repeated_identity_and_prioritizes_summary(records):
     member = MemberReport("u1", "Chang GAO", [records["commit"]])
     report = generate_daily_report(date(2026, 10, 12), "Chang GAO", [member], {

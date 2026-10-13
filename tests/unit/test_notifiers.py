@@ -10,7 +10,8 @@ from smart_daily_report.shared.models import DailyReport, SmtpConfig
 
 
 def report():
-    return DailyReport(date(2026, 9, 25), "team", [], {}, "# daily", "<h1>daily</h1>", datetime.now(timezone.utc))
+    return DailyReport(date(2026, 9, 25), "team", [], {}, "# daily", "<h1>daily</h1>",
+                       datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc))
 
 
 class FakeSMTP:
@@ -41,7 +42,24 @@ def test_email_subject_identifies_author_and_report_date():
     result = send_email(report(), ["lead@test"], SmtpConfig("host", 587, None, None, "from@test", []), CapturingSMTP)
 
     assert result.success
-    assert subjects == ["高畅智能日报（2026-09-25）"]
+    assert subjects == ["高畅智能日报（2026-09-25 18:00版）"]
+
+
+def test_email_subject_distinguishes_two_generations_on_same_date():
+    subjects = []
+    class CapturingSMTP(FakeSMTP):
+        def send_message(self, message):
+            subjects.append(str(message["Subject"]))
+            return {}
+
+    smtp = SmtpConfig("host", 587, None, None, "from@test", [])
+    from dataclasses import replace
+    for hour in (12, 13):
+        snapshot = replace(report(), generated_at=datetime(2026, 9, 25, hour, tzinfo=timezone.utc))
+        result = send_email(snapshot, ["mentor@test", "senior@test"], smtp, CapturingSMTP)
+        assert result.success
+    assert subjects == ["高畅智能日报（2026-09-25 20:00版）",
+                        "高畅智能日报（2026-09-25 21:00版）"]
 
 
 def test_email_uses_implicit_ssl_when_configured(monkeypatch):
