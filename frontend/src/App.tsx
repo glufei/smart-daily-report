@@ -4,6 +4,7 @@ import type { PreviewView } from './operations';
 import { OperationPanel } from './OperationPanel';
 import { queryReport, safeUrl, validDate } from './api';
 import type { QueryResult, Report, SourceStatus } from './api';
+import { formatChinaTimestamp } from './time';
 
 type View = { kind: 'initial' } | { kind: 'loading' } | (QueryResult & { date: string });
 const sources = [['github_commits', '代码提交'], ['lark_tasks', '任务进展'], ['lark_messages', '协作沟通']] as const;
@@ -19,24 +20,6 @@ function Section({ title, status, children, empty }: {
     {status === 'disabled' ? <p className="record-empty">未启用</p> : status === 'pending' ? <p>正在采集…</p> : status === 'failure' ? <p className="record-failed">数据获取失败</p>
       : empty ? <p className="record-empty">今日无记录</p> : <ul className="records">{children}</ul>}
   </section>;
-}
-
-function formatTimestamp(timestamp: string) {
-  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(timestamp);
-  if (!match) return timestamp;
-  const offset = match[3] === 'Z' ? '+00:00' : match[3];
-  return `${match[1]} ${match[2]}（UTC${offset}）`;
-}
-
-function formatChinaTimestamp(timestamp: string) {
-  const parsed = new Date(timestamp);
-  if (!Number.isFinite(parsed.getTime())) return timestamp;
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-  }).formatToParts(parsed);
-  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}（中国标准时间，UTC+08:00）`;
 }
 
 function ReportContent({ report, sources: outcomes, headingRef }: { report: Report; sources?: PreviewView['sources']; headingRef?: RefObject<HTMLHeadingElement | null> }) {
@@ -56,7 +39,7 @@ function ReportContent({ report, sources: outcomes, headingRef }: { report: Repo
     <header className="report-head"><h2 ref={headingRef} tabIndex={-1} className="report-team">{report.team_name}</h2>
       <p className="report-origin-note">本日报由系统自动生成，内容依据已配置并成功采集的数据。</p>
       <dl className="report-meta"><div><dt>报告日期</dt><dd>{report.report_date}</dd></div>
-        <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{formatTimestamp(report.generated_at)}</time></dd></div></dl>
+        <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{formatChinaTimestamp(report.generated_at)}</time></dd></div></dl>
       <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
     </header>
     <div className="members">{report.members.map(member => <article className="member" key={member.member_id} aria-label={member.display_name}>
@@ -80,10 +63,10 @@ function ReportContent({ report, sources: outcomes, headingRef }: { report: Repo
           <h4 className="source-group-title">飞书｜任务与工作消息</h4>
           <Section title="任务进展" status={status('lark_tasks')} empty={member.tasks.length === 0}>
             {member.tasks.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.title}（{record.status === 'completed' ? '已完成' : record.status}）</RecordLink>
-              <small>{record.changed_at}{record.status_from !== null && record.status_to !== null ? ` · ${record.status_from} → ${record.status_to}` : ''}</small></li>)}
+              <small><time dateTime={record.changed_at}>{formatChinaTimestamp(record.changed_at)}</time>{record.status_from !== null && record.status_to !== null ? ` · ${record.status_from} → ${record.status_to}` : ''}</small></li>)}
           </Section>
           <Section title="工作消息" status={status('lark_messages')} empty={member.messages.length === 0}>
-            {member.messages.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.content}</RecordLink><small>{record.sent_at}{record.chat_name ? ` · ${record.chat_name}` : ''}</small></li>)}
+            {member.messages.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.content}</RecordLink><small><time dateTime={record.sent_at}>{formatChinaTimestamp(record.sent_at)}</time>{record.chat_name ? ` · ${record.chat_name}` : ''}</small></li>)}
           </Section>
         </section>
       </div>
