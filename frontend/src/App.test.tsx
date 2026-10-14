@@ -13,7 +13,7 @@ test('viewing saved history preserves every member and the distinction between e
   report.source_status.lark_tasks = 'failure'; report.members[0].tasks = [];
   const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
   await screen.findByRole('heading', { name: '示例研发团队' });
-  expect(screen.getByText('2026-09-25 18:00:00（UTC+08:00）')).toBeInTheDocument();
+  expect(screen.getByText('2026-09-25 18:00:00（中国标准时间，UTC+08:00）')).toBeInTheDocument();
   for (const name of ['示例成员甲', '示例成员乙']) {
     const member = screen.getByRole('article', { name });
     expect(within(member).getByRole('heading', { name, level: 3 })).toBeInTheDocument();
@@ -89,12 +89,12 @@ test('separates GitHub from Feishu and labels summaries as automatic', async () 
   expect(screen.getByText(/本日报由系统自动生成/)).toBeInTheDocument();
 });
 
-test('renders generated time in the timezone returned by the API', async () => {
+test('renders generated time in China Standard Time alongside report records', async () => {
   const report = reportFixture();
   report.generated_at = '2026-09-25T18:00:00+08:00';
   const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
   await screen.findByRole('heading', { name: '示例研发团队' });
-  expect(screen.getByText('2026-09-25 18:00:00（UTC+08:00）')).toBeInTheDocument();
+  expect(screen.getByText('2026-09-25 18:00:00（中国标准时间，UTC+08:00）')).toBeInTheDocument();
 });
 
 test('renders GitHub commit timestamps in China Standard Time regardless of browser timezone', async () => {
@@ -103,6 +103,24 @@ test('renders GitHub commit timestamps in China Standard Time regardless of brow
   const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
   await screen.findByRole('heading', { name: '示例研发团队' });
   expect(screen.getByText('2026-09-25 20:37:19（中国标准时间，UTC+08:00）')).toBeInTheDocument();
+});
+
+test('renders Feishu task and message instants in the same China Standard Time as GitHub', async () => {
+  const report = reportFixture();
+  report.members[0].tasks[0].changed_at = '2026-10-14T06:07:53.519000Z';
+  report.members[0].messages[0].sent_at = '2026-10-14T06:08:23.830000Z';
+  const fetchMock = vi.fn().mockResolvedValue(response(report)); setup(fetchMock); query();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  const feishu = within(screen.getByRole('article', { name: '示例成员甲' })).getByRole('region', { name: '飞书｜任务与工作消息' });
+  const times = within(feishu).getAllByRole('time');
+  expect(times.map(time => time.textContent)).toEqual([
+    '2026-10-14 14:07:53（中国标准时间，UTC+08:00）',
+    '2026-10-14 14:08:23（中国标准时间，UTC+08:00）',
+  ]);
+  expect(times.map(time => time.getAttribute('datetime'))).toEqual([
+    '2026-10-14T06:07:53.519000Z', '2026-10-14T06:08:23.830000Z',
+  ]);
+  expect(feishu.textContent).not.toContain('2026-10-14T06:');
 });
 
 test('summary reports failed source counts as unknown instead of zero', async () => {

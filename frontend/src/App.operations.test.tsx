@@ -234,12 +234,13 @@ test('pending_source_evidence_is_not_rendered_as_empty_success', async () => {
 });
 
 
-test('readonly_history_preserves_UTC_and_missing_optional_metadata', async () => {
+test('readonly_history_shows_China_time_but_preserves_the_original_instant_and_optional_metadata', async () => {
   const report = previewFixture().report; report.generated_at = '2026-09-25T10:00:00Z';
   report.members[0].tasks[0].status_from = null; report.members[0].tasks[0].status_to = null; report.members[0].messages[0].chat_name = '';
   vi.stubEnv('VITE_API_MODE', 'readonly'); vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(report))); render(<App />);
   fireEvent.change(screen.getByLabelText('报告日期'), { target: { value: '2026-09-25' } }); fireEvent.click(screen.getByRole('button', { name: '查看日报' }));
-  await screen.findByRole('heading', { name: '示例研发团队' }); expect(screen.getByText(/UTC\+00:00/)).toBeInTheDocument();
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  expect(screen.getByText('2026-09-25 18:00:00（中国标准时间，UTC+08:00）')).toHaveAttribute('datetime', '2026-09-25T10:00:00Z');
   expect(screen.queryByText(/— →/)).not.toBeInTheDocument();
 });
 
@@ -823,7 +824,11 @@ test('query_feedback_completion_describes_the_execution_date', async () => {
   fireEvent.click(screen.getByRole('button', { name: '查询执行结果' }));
   await screen.findByText(/执行结果查询完成/);
   expect(screen.getByLabelText('本次查询时间')).toBeVisible();
-  expect(screen.getByText(/操作：生成日报 · 2026-09-24/)).toBeVisible();
+  const feedback = screen.getByText('执行结果查询完成').closest('.operation-feedback') as HTMLElement;
+  expect(within(feedback).getByText('生成日报')).toBeVisible();
+  expect(within(feedback).getByText('2026-09-24')).toBeVisible();
+  expect(within(feedback).getByText('执行成功')).toBeVisible();
+  expect(within(feedback).getByText('2026-09-25 10:00:00（中国标准时间，UTC+08:00）')).toBeVisible();
 });
 
 

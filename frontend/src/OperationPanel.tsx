@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { validDate } from './api';
 import { deliverReport, generateReport, getCurrentOperation, getOperation, getOperationByKey, getPreview, OperationError } from './operations';
 import type { OperationView, PreviewView } from './operations';
+import { formatChinaTimestamp } from './time';
 
 type Channel = 'email' | 'lark';
 type PendingRequest = { kind: 'generation'; key: string; date: string } | { kind: 'delivery'; key: string; date: string; revision: string; channels: Channel[]; emailRecipients: string[] };
 type Confirmation = { date: string; revision: string; channels: Channel[]; targets: string[]; emailRecipients: string[] };
 type Props = { date: string; onPreview: (value: PreviewView | null, focus?: boolean) => void; preview: PreviewView | null };
-type ActionFeedback = { kind: 'query' | 'preview'; pending: boolean; text: string; completedAt?: string; failed?: boolean };
+type ActionFeedback = { kind: 'query' | 'preview'; pending: boolean; text: string; completedAt?: string; failed?: boolean;
+  result?: Pick<OperationView, 'kind' | 'report_date' | 'status' | 'updated_at'> };
+const operationStates = { running: '执行中', succeeded: '执行成功', partial_failure: '部分失败', failed: '执行失败',
+  skipped: '已跳过', unknown: '结果待核实', interrupted: '已中断' };
 export function OperationPanel({ date, onPreview, preview }: Props) {
   const [token, setToken] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
@@ -167,9 +171,8 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
         : operation ? await getOperation(operation.operation_id, token, ticket.signal) : await getCurrentOperation(token, ticket.signal);
       if (ticket.id !== work.current.id) return;
       clearTimeout(work.current.actionTimer);
-      const states = { running: '执行中', succeeded: '执行成功', partial_failure: '部分失败', failed: '执行失败', skipped: '已跳过', unknown: '结果待核实', interrupted: '已中断' };
       setActionFeedback({ kind: 'query', pending: false, completedAt: new Date().toISOString(),
-        text: result ? `执行结果查询完成。操作：${result.kind === 'generation' ? '生成日报' : '推送日报'} · ${result.report_date} · ${states[result.status]}；服务器更新时间：${new Date(result.updated_at).toLocaleString()}。` : '暂无执行记录' });
+        text: result ? '执行结果查询完成' : '暂无执行记录', result: result ?? undefined });
       if (result) {
         await show(result, ticket, date);
       } else { setOperation(null); setMessage(''); }
@@ -202,25 +205,37 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
   const outcomeText = { not_requested: '本次未选择', pending: '结果待确认', accepted: '服务商已受理', rejected: '明确拒绝，可单独重提',
     partial_failure: '部分受理，请先核实实际收件', unknown: '结果未知，请先核实实际收件' };
   return <section className="query-card operation-panel" aria-label="日报操作">
-    <label htmlFor="operation-token">操作令牌</label>
-    <input ref={tokenInput} id="operation-token" className="input" type="password" autoComplete="off" value={token}
-      aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
-      onChange={event => { stop(); setToken(event.target.value); setAuthenticated(false); setBusy(false); setActionFeedback(null); setConfirmation(null); onPreview(null); if (message === '请输入操作令牌') setMessage(''); }} />
-    <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void authenticate()}>验证令牌</button>
-    <button type="button" className="btn btn-primary" disabled={!authenticated || !validDate(date) || busy || operation?.status === 'running' || !!pending.current}
-      aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
-      onClick={() => void generate()}>采集并生成</button>
-    {!authenticated && <p id="operation-token-hint" className="query-hint">请先输入并验证操作令牌，验证成功后才能采集并生成。</p>}
-    {authenticated && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void queryResult()}>{actionFeedback?.kind === 'query' && actionFeedback.pending ? '正在查询执行结果…' : '查询执行结果'}</button>}
-    {authenticated && canRetry && pending.current && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void submitRequest(pending.current!)}>重试原请求</button>}
-    {authenticated && <button type="button" className="btn btn-accent-outline" disabled={!validDate(date) || busy || operation?.status === 'running'} onClick={() => void previewReport()}>{actionFeedback?.kind === 'preview' && actionFeedback.pending ? '正在加载日报预览…' : '预览日报'}</button>}
+    <div className="operation-intro"><h2>日报操作</h2><p>验证操作令牌后，可生成、查询或预览所选日期的日报。</p></div>
+    <div className="operation-auth"><label htmlFor="operation-token">操作令牌</label>
+      <div className="operation-auth-controls"><input ref={tokenInput} id="operation-token" className="input" type="password" autoComplete="off" value={token}
+        aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
+        onChange={event => { stop(); setToken(event.target.value); setAuthenticated(false); setBusy(false); setActionFeedback(null); setConfirmation(null); onPreview(null); if (message === '请输入操作令牌') setMessage(''); }} />
+        <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void authenticate()}>验证令牌</button></div>
+      {!authenticated && <p id="operation-token-hint" className="query-hint">请先输入并验证操作令牌，验证成功后才能采集并生成。</p>}
+    </div>
+    <div className="operation-actions" role="group" aria-label="日报执行操作">
+      <button type="button" className="btn btn-primary" disabled={!authenticated || !validDate(date) || busy || operation?.status === 'running' || !!pending.current}
+        aria-describedby={!authenticated ? 'operation-token-hint' : undefined}
+        onClick={() => void generate()}>采集并生成</button>
+      {authenticated && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void queryResult()}>{actionFeedback?.kind === 'query' && actionFeedback.pending ? '正在查询执行结果…' : '查询执行结果'}</button>}
+      {authenticated && canRetry && pending.current && <button type="button" className="btn btn-accent-outline" disabled={busy} onClick={() => void submitRequest(pending.current!)}>重试原请求</button>}
+      {authenticated && <button type="button" className="btn btn-accent-outline" disabled={!validDate(date) || busy || operation?.status === 'running'} onClick={() => void previewReport()}>{actionFeedback?.kind === 'preview' && actionFeedback.pending ? '正在加载日报预览…' : '预览日报'}</button>}
+    </div>
     {actionFeedback && <div className="operation-feedback" role={actionFeedback.failed ? 'alert' : 'status'} aria-busy={actionFeedback.pending}>
-      <p>{actionFeedback.text}</p>
-      {actionFeedback.completedAt && <p>本次查询时间：<time aria-label="本次查询时间" dateTime={actionFeedback.completedAt}>{new Date(actionFeedback.completedAt).toLocaleString()}（{Intl.DateTimeFormat().resolvedOptions().timeZone}）</time></p>}
+      <strong>{actionFeedback.text}</strong>
+      {actionFeedback.result && <dl className="operation-feedback-details">
+        <div><dt>操作</dt><dd>{actionFeedback.result.kind === 'generation' ? '生成日报' : '推送日报'}</dd></div>
+        <div><dt>报告日期</dt><dd>{actionFeedback.result.report_date}</dd></div>
+        <div><dt>执行状态</dt><dd>{operationStates[actionFeedback.result.status]}</dd></div>
+        <div><dt>服务器更新时间</dt><dd><time dateTime={actionFeedback.result.updated_at}>{formatChinaTimestamp(actionFeedback.result.updated_at)}</time></dd></div>
+      </dl>}
+      {actionFeedback.completedAt && <p className="operation-feedback-queried">本次查询时间 <time aria-label="本次查询时间" dateTime={actionFeedback.completedAt}>{formatChinaTimestamp(actionFeedback.completedAt)}</time></p>}
     </div>}
-    {authenticated && preview && <div className="delivery-options">
-      <p>预览版本：<code>{preview.report_revision}</code></p>
-      {(['email', 'lark'] as Channel[]).map(channel => <div key={channel}>
+    {message && <p className="operation-message" role="status">{message}</p>}
+    {authenticated && preview && <div className="delivery-options delivery-settings">
+      <h3>推送设置</h3>
+      <p className="delivery-revision">预览版本：<code>{preview.report_revision}</code></p>
+      {(['email', 'lark'] as Channel[]).map(channel => <div className="delivery-channel" key={channel}>
         <label><input type="checkbox" aria-label={channel === 'email' ? '邮件' : '飞书'} checked={channels.includes(channel)} disabled={busy || blocked(channel)}
           onChange={event => { setConfirmation(null); setChannels(current => event.target.checked ? [...current, channel].sort() : current.filter(value => value !== channel)); if (channel === "email") setEmailRecipients([]); }} />{preview.targets[channel].label}</label>
         <p>{channel === 'email' ? '邮件' : '飞书'}：{preview.targets[channel].previous ? outcomeText[preview.targets[channel].previous.status] : '无本轮推送记录'}</p>
@@ -256,6 +271,5 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
         <button type="button" className="btn btn-primary" onClick={confirmDelivery}>确认推送</button>
       </dialog>}
     {operation && operation.report_date !== date && <p>正在查看 {operation.report_date} 的操作结果</p>}
-    {message && <p role="status">{message}</p>}
   </section>;
 }

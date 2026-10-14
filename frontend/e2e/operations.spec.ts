@@ -202,7 +202,7 @@ test('manual_preview_focus_and_feedback', async ({ page }) => {
   expect(await counts()).toEqual(before);
 });
 
-test('query_feedback_and_readonly_requests', async ({ page }) => {
+test('query_feedback_and_readonly_requests', async ({ page }, info) => {
   await authenticate(page); await generate(page); const before = await counts(); const methods: string[] = [];
   page.on('request', request => { if (request.url().includes('/api/v1/')) methods.push(request.method()); });
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
@@ -210,6 +210,9 @@ test('query_feedback_and_readonly_requests', async ({ page }) => {
   await page.getByRole('button', { name: '查询执行结果', exact: true }).click();
   await expect(page.getByRole('button', { name: '正在查询执行结果…', exact: true })).toBeDisabled(); release();
   await expect(page.getByText(/执行结果查询完成/)).toBeVisible();
+  await expect(page.locator('.operation-feedback-details')).toContainText('服务器更新时间');
+  await expect(page.locator('.operation-feedback-details')).toContainText('中国标准时间，UTC+08:00');
+  if (process.env.DAILY_REPORT_E2E_SCREENSHOT_DIR) await screenshot(page, info.project.name, 'query-feedback');
   const first = await page.getByLabel('本次查询时间', { exact: true }).getAttribute('datetime');
   await page.getByRole('button', { name: '查询执行结果', exact: true }).click();
   await expect(page.getByLabel('本次查询时间', { exact: true })).not.toHaveAttribute('datetime', first!);

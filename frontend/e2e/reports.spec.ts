@@ -31,7 +31,11 @@ test('real saved reports retain every member, sections, timestamps and source st
   page.on('response', async response => { if (response.url().includes('/api/v1/reports/')) bodies.push(await response.text()); });
   await page.goto('/'); await screenshot(page, info.project.name, 'initial');
   await query(page, '2026-09-25'); await expect(page.getByRole('heading', { name: '示例研发团队' })).toBeVisible();
-  await expect(page.getByText(/UTC\+00:00/)).toBeVisible();
+  await expect(page.locator('.report-meta')).toContainText('2026-09-25 18:00:00（中国标准时间，UTC+08:00）');
+  await expect(page.getByRole('region', { name: '飞书｜任务与工作消息' }).first().getByRole('time')).toHaveText([
+    '2026-09-25 18:00:00（中国标准时间，UTC+08:00）',
+    '2026-09-25 18:00:00（中国标准时间，UTC+08:00）',
+  ]);
   await expect(page.getByText(/本日报由系统自动生成/)).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(2);
   for (const name of ['示例成员甲', '示例成员乙']) {
