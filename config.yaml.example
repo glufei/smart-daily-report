@@ -8,7 +8,7 @@ team:
   github_repositories: [owner/repository] # 来源、身份和关键词均使用字符串列表；不用时填 []
   lark_project_ids: []
   lark_chat_ids: []
-  report_keywords: [日报, 进展, 发布]
+  report_keywords: [] # 收录来源群中已映射成员的全部消息；如需只收录特定内容，可填 [日报, 进展, 发布]
   sensitive_keywords: [薪资, 绩效]
   lark_task_search_path: /task/v2/tasklists/{tasklist_guid}/tasks
   lark_message_path: /im/v1/messages
