@@ -307,7 +307,16 @@ npm run build
 
 [GitHub Actions 工作流](.github/workflows/ci.yml)在 PR、`main` 提交和手动触发时运行：安装 Python 3.12 与 Node.js 24，执行后端测试（总覆盖率至少 90%）、前端测试（覆盖率按文件的行、语句、函数、分支均至少 90%），再进行前端类型检查和构建。任一步失败，整次运行即失败。PR 只做检查；`main` 提交或手动运行全部通过后，再构建 Python wheel，并将 wheel 与前端静态文件上传为保留 14 天的产物。
 
-CI 中未设置 `VITE_API_MODE`，因此其前端产物是**只读模式**。若要部署操作页面，需按[本地构建说明](docs/frontend/local-run.md#react-页面第二个-powershell-窗口)设置 `VITE_API_MODE=operations` 和公开的 API 地址后重新构建。构建产物不是已配置好凭证的在线服务。
+CI 中未设置 `VITE_API_MODE`，因此其前端产物是**只读模式**。若要构建操作页面，从项目根目录执行以下命令；API 地址是公开的本机地址，**不要放入令牌或密钥**：
+
+```powershell
+Set-Location 'frontend'
+$env:VITE_API_MODE = 'operations'
+$env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
+npm run build
+```
+
+这只生成静态文件，不会启动服务或发送通知。启动与预览步骤见[本地运行说明](docs/frontend/local-run.md#v12-真实操作模式)；构建产物不是已配置好凭证的在线服务。
 
 这属于持续集成与**可供下载的持续交付产物**，没有部署目标，也不会运行日报、发送邮件或向飞书发消息。工作流只使用仓库代码和测试数据，不需要配置 GitHub / 飞书 / 邮箱密钥；本机 `.env`、`config.yaml` 和 SQLite 历史库均不上传。Playwright 浏览器测试仍按本地运行说明执行，**尚未纳入 CI**。在 GitHub 仓库打开 **Actions → CI and delivery → 某次运行 → Artifacts** 可下载产物；手动运行可使用该工作流的 **Run workflow**。当前工作流会显示检查结果，但是否把它设为合并前必需检查，取决于仓库另行设置的分支保护规则。
 
