@@ -18,7 +18,7 @@ class RunConfig:
     github_repositories: list[str]
     lark_project_ids: list[str]
     lark_chat_ids: list[str]
-    report_keywords: list[str]
+    report_keywords: list[str]  # 空列表不设包含关键词条件；仍按日期、成员和敏感词规则筛选
     sensitive_keywords: list[str]
     holidays: set[date]
     # secret values are resolved from environment, not stored in the config file
