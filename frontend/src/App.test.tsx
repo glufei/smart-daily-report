@@ -19,6 +19,9 @@ test('shared webpage keeps useful counts without exposing source details', async
   expect(within(member).getByText('代码提交：1 条')).toBeInTheDocument();
   expect(within(member).getByText('已完成任务：1 条')).toBeInTheDocument();
   expect(within(member).getByText('协作沟通：1 条')).toBeInTheDocument();
+  expect(within(member).getByText('已获取记录合计：3 条')).toBeInTheDocument();
+  expect(within(member).getByText('有记录类别：3 项')).toBeInTheDocument();
+  expect(within(member).getByText('记录数量对比')).toBeInTheDocument();
   expect(member).not.toHaveTextContent('classified-project-marker');
   expect(within(member).queryByRole('link')).not.toBeInTheDocument();
 });
@@ -33,6 +36,7 @@ test('saved history keeps every member and distinguishes zero from source failur
     expect(member.getByRole('heading', { name: '今日概览' })).toBeInTheDocument();
     expect(member.getByText('已完成任务：获取失败，数量未知')).toBeInTheDocument();
     expect(member.queryByText('已完成任务：0 条')).not.toBeInTheDocument();
+    expect(member.getByText('1 类来源获取失败，未计入合计')).toBeInTheDocument();
   }
   expect(within(screen.getByRole('article', { name: '示例成员乙' })).getByText('代码提交：0 条')).toBeInTheDocument();
   expect(screen.getByText('部分数据源获取失败：任务进展')).toBeInTheDocument();
@@ -77,6 +81,7 @@ test('source failure count is unknown rather than zero', async () => {
   const summary = within(screen.getByRole('article', { name: '示例成员甲' })).getByRole('region', { name: '今日概览' });
   expect(within(summary).getByText('代码提交：获取失败，数量未知')).toBeInTheDocument();
   expect(within(summary).queryByText('代码提交：0 条')).not.toBeInTheDocument();
+  expect(within(summary).getByText('1 类来源获取失败，未计入合计')).toBeInTheDocument();
 });
 
 test.each([

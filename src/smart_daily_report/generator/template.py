@@ -25,6 +25,12 @@ def _summary_value(member: MemberReport, attr: str, source: str,
     return f"{len(getattr(member, attr))} 条"
 
 
+def _summary_counts(member: MemberReport, source_status: Mapping[str, CollectResultStatus]) -> list[tuple[str, int | None]]:
+    return [(label, None if source_status.get(source, "success") == "failure"
+             else len(getattr(member, attr)))
+            for label, attr, source in SUMMARY_LABELS]
+
+
 def safe_url(url: str | None) -> str | None:
     if not url:
         return None
@@ -44,13 +50,19 @@ def render_markdown(report_date: date, team_name: str, members: Sequence[MemberR
     multiple_members = len(members) > 1
     summary_level = "###" if multiple_members else "##"
     for member in members:
+        counts = _summary_counts(member, source_status)
+        known = [count for _, count in counts if count is not None]
+        failed = len(counts) - len(known)
         if multiple_members:
             lines.extend((f"## {_markdown_text(member.display_name)}", ""))
         lines.extend((f"{summary_level} 今日概览", ""))
         lines.extend(("仅依据成功采集的记录统计；获取失败的来源数量未知。", ""))
+        lines.extend((f"**已获取记录合计：{sum(known)} 条｜有记录类别：{sum(count > 0 for count in known)} 项**", ""))
+        if failed:
+            lines.extend((f"{failed} 类来源获取失败，未计入合计", ""))
         for label, attr, source in SUMMARY_LABELS:
             lines.append(f"- {label}：{_summary_value(member, attr, source, source_status)}")
-        lines.append("")
+        lines.extend(("", "记录数量仅供了解采集情况，不代表工作量或成果质量。", ""))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -77,6 +89,9 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
         output.append(f'<p style="{muted_style};margin-top:6px">生成时间：{_format_commit_timestamp(generated_at)}</p>')
     output.append('</td></tr><tr><td height="14" style="height:14px;font-size:0;line-height:0">&nbsp;</td></tr>')
     for member in members:
+        counts = _summary_counts(member, source_status)
+        known = [count for _, count in counts if count is not None]
+        failed = len(counts) - len(known)
         if multiple_members:
             output.extend((
                 '<tr><td style="padding:4px 2px 10px">',
@@ -87,6 +102,9 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
             '<tr><td style="padding:20px 22px;background:#fff;border:1px solid #dce3ec;border-radius:12px">',
             f'<h2 style="{section_style};margin-bottom:4px">今日概览</h2>',
             f'<p style="{muted_style};margin-bottom:14px">仅统计成功采集的记录；来源获取失败时数量标记为未知。代码提交来自 GitHub，任务与协作沟通来自飞书。</p>',
+            f'<p style="margin:0 0 6px;font-size:17px;font-weight:bold;color:#17365d">已获取记录合计：{sum(known)} 条</p>',
+            f'<p style="{muted_style};margin-bottom:12px">有记录类别：{sum(count > 0 for count in known)} 项</p>',
+            *([f'<p style="{muted_style};margin-bottom:12px;color:#9a5b00">{failed} 类来源获取失败，未计入合计</p>'] if failed else []),
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;border-spacing:6px 0"><tr>',
         ))
         for label, attr, source in SUMMARY_LABELS:
@@ -96,7 +114,20 @@ def render_html(report_date: date, team_name: str, members: Sequence[MemberRepor
                 f'<p style="{muted_style};margin-bottom:5px">{html.escape(label)}</p>'
                 f'<p style="margin:0;font-size:18px;line-height:1.4;font-weight:bold;color:#17365d">{html.escape(value)}</p></td>'
             )
-        output.append('</tr></table></td></tr><tr><td height="14" style="height:14px;font-size:0;line-height:0">&nbsp;</td></tr>')
+        output.append('</tr></table>')
+        output.append('<p style="margin:18px 0 6px;font-size:15px;font-weight:bold;color:#17365d">记录数量对比</p>')
+        maximum = max(known, default=0)
+        for label, count in counts:
+            value = "数量未知" if count is None else f"{count} 条"
+            width = max(2, round(count / maximum * 100)) if count is not None and count > 0 and maximum else 0
+            output.append(
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:7px">'
+                f'<tr><td width="88" style="width:88px;font-size:13px;color:#243247">{html.escape(label)}</td>'
+                f'<td style="background:#edf1f6;border-radius:4px"><div style="height:8px;width:{width}%;background:#416f9b;border-radius:4px"></div></td>'
+                f'<td width="72" align="right" style="width:72px;font-size:13px;color:#243247">{value}</td></tr></table>'
+            )
+        output.append(f'<p style="{muted_style};margin-top:10px">记录数量仅供了解采集情况，不代表工作量或成果质量。</p>')
+        output.append('</td></tr><tr><td height="14" style="height:14px;font-size:0;line-height:0">&nbsp;</td></tr>')
 
     output.append('</table></td></tr></table></body></html>')
     return "".join(output)

@@ -42,7 +42,8 @@ test('real saved reports show member summaries without source details', async ({
   }
   await expect(page.locator('.summary-list li').first()).toHaveCSS('font-size', '18px');
   await expect(page.locator('.summary-note').first()).toHaveCSS('font-size', '14px');
-  await expect(page.getByRole('article', { name: '示例成员乙' }).getByText(/0 条/)).toHaveCount(3);
+  await expect(page.getByRole('article', { name: '示例成员乙' }).locator('.summary-list li')).toContainText(['代码提交：0 条', '已完成任务：0 条', '协作沟通：0 条']);
+  await expect(page.getByRole('article', { name: '示例成员甲' }).getByText('已获取记录合计：3 条')).toBeVisible();
   await expect(page.locator('.member').first()).not.toContainText('修正日期选择交互');
   await expect(page.locator('.member').first()).not.toContainText('完成页面契约评审');
   await expect(page.locator('.member').first()).not.toContainText('日报：已完成只读页面原型');
@@ -50,7 +51,9 @@ test('real saved reports show member summaries without source details', async ({
   await query(page, '2026-09-26'); await expect(page.getByText('部分数据源获取失败：任务进展')).toBeVisible();
   for (const name of ['示例成员甲', '示例成员乙']) await expect(page.getByRole('article', { name }).getByText('已完成任务：获取失败，数量未知')).toBeVisible();
   await screenshot(page, info.project.name, 'source-failure');
-  await query(page, '2026-09-30'); await expect(page.getByRole('article').getByText(/0 条/)).toHaveCount(6);
+  await query(page, '2026-09-30');
+  await expect(page.getByRole('article').locator('.summary-list li')).toContainText(['代码提交：0 条', '已完成任务：0 条', '协作沟通：0 条']);
+  await expect(page.getByRole('article').getByText('已获取记录合计：0 条')).toHaveCount(2);
   await screenshot(page, info.project.name, 'empty-records');
   expect(requests).toHaveLength(3);
   expect(requests.every(value => /^GET http:\/\/127\.0\.0\.1:8765\/api\/v1\/reports\//.test(value))).toBe(true);
