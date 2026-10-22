@@ -9,6 +9,8 @@
 - **运行方式**：按需手动运行，没有定时任务或自动部署；GitHub Actions 只负责检查和打包，详见 [CI/CD](#cicd自动验证与交付构建文件)。
 - **时间与历史**：新生成的网页和邮件将报告生成时间显示为中国标准时间（Asia/Shanghai，UTC+08:00）；原始记录的时间点不变。历史 Markdown/HTML 是快照，不会自动改写。旧版含明细的快照会被操作模式拒绝推送，须先对指定日期重新「采集并生成」、预览汇总内容，再单独确认发送。
 
+“有记录类别”指上述三类中，成功采集且数量大于 0 的类别数。例如代码提交 3 条、已完成任务 0 条、协作沟通 0 条时，**已获取记录合计为 3 条，有记录类别为 1 项**；它不是项目数或成果数。来源获取失败时数量未知，不应把它理解为 0。
+
 ## 先选择你要做什么
 
 | 你的情况 | 从哪里开始 |
@@ -304,7 +306,7 @@ npm run test -- --run --coverage
 npm run build
 ```
 
-浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。汇总版当前验证结果见[汇总版变更与验证](docs/frontend/summary-only-report.md)。[2026-10-20 验证记录](docs/project-verification-2026-10-20.md)与 [v1.6.6 审查记录](docs/project-audit-2026-10-14.md)为旧版历史证据；其中的明细展示和测试数量不能代表当前版本。测试截图输出到被忽略的 `.runtime` 目录。
+浏览器测试另见[运行说明](docs/frontend/local-run.md#操作模式可复现-fixture不访问真实平台)，需要已安装 Chrome 和可用测试端口。本次完整复核结果见 [2026-10-23 验证记录](docs/project-verification-2026-10-23.md)，汇总版内容边界见[汇总版说明](docs/frontend/summary-only-report.md)。[2026-10-20 验证记录](docs/project-verification-2026-10-20.md)与 [v1.6.6 审查记录](docs/project-audit-2026-10-14.md)为旧版历史证据；其中的明细展示和测试数量不能代表当前版本。浏览器测试会重新生成部分跟踪截图；仅做复核时请在测试后检查工作区并恢复这些截图，避免混入提交。
 
 ### CI/CD：自动验证与交付构建文件
 
@@ -332,6 +334,7 @@ npm run build
 | 飞书访问策略错误 `21001` | [排查说明](docs/frontend/feishu-access-policy-21001.md) |
 | v1.6.6 的历史测试结果与边界 | [2026-10-20 验证记录](docs/project-verification-2026-10-20.md) |
 | 汇总版内容边界、升级与验证 | [汇总版变更与验证](docs/frontend/summary-only-report.md) |
+| v1.7.0 本次完整复核结果与未覆盖范围 | [2026-10-23 验证记录](docs/project-verification-2026-10-23.md) |
 | 需求、架构及任务依据 | [需求规范](specs/proposal.md)、[架构设计](specs/design.md)、[任务清单](specs/tasks.md) |
 | v1.6.6 的修复与清理经过 | [2026-10-14 全项目审查](docs/project-audit-2026-10-14.md) |
 
