@@ -144,7 +144,7 @@ export function OperationPanel({ date, onPreview, preview }: Props) {
       if (ticket.id !== work.current.id) return;
       if (error instanceof OperationError && !['network_error', 'invalid_response', 'operation_storage_failed', 'internal_error'].includes(error.code)) {
         pending.current = null; failure(error);
-        if (error.code === 'report_revision_changed' || error.code === 'delivery_not_repeatable') onPreview(null);
+        if (error.code === 'report_revision_changed' || error.code === 'report_requires_regeneration' || error.code === 'delivery_not_repeatable') onPreview(null);
       } else {
         try { await show(await getOperationByKey(request.key, token, ticket.signal), ticket, date); }
         catch (lookupError) { if (ticket.id === work.current.id) { failure(lookupError); setCanRetry(lookupError instanceof OperationError && lookupError.code === 'operation_not_found'); setMessage('执行结果尚未确认'); } }

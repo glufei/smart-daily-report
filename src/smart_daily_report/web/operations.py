@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from ..main import run_report
+from ..generator.template import render_html, render_markdown
 from ..shared.models import DailyReport, RunConfig
 from ..notifier.email import send_email
 from ..notifier.lark_bot import send_lark_message
@@ -94,6 +95,12 @@ class OperationService:
             snapshot, _ = self._read_report(body.report_date)
             if report_revision(snapshot) != body.report_revision:
                 raise OperationError(409, "report_revision_changed")
+            if (snapshot.markdown != render_markdown(snapshot.report_date, snapshot.team_name,
+                                                    snapshot.members, snapshot.source_status)
+                    or snapshot.html != render_html(snapshot.report_date, snapshot.team_name,
+                                                   snapshot.members, snapshot.source_status,
+                                                   generated_at=snapshot.generated_at)):
+                raise OperationError(409, "report_requires_regeneration")
         fingerprint = json.dumps({"kind": "delivery", **body.model_dump(mode="json")}, sort_keys=True, separators=(",", ":"))
         sources = {name: None for name in ("github_commits", "lark_tasks", "lark_messages")}
         deliveries = {name: {"status": "pending" if name in body.channels else "not_requested", "attempts": 0, "error_code": None}

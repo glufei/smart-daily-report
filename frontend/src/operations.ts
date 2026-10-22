@@ -27,7 +27,7 @@ const messages: Record<string, string> = {
   operation_unauthorized: '操作令牌无效或未提供', origin_not_allowed: '请求来源未允许',
   report_not_found: '该日期尚无日报', operation_not_found: '未找到该操作记录',
   idempotency_conflict: '同一请求标识不能用于不同操作', operation_busy: '已有操作正在执行，请先查看其结果',
-  report_revision_changed: '日报已更新，请重新预览后推送', delivery_not_repeatable: '该渠道已接受或结果待核实，不能重复推送',
+  report_revision_changed: '日报已更新，请重新预览后推送', report_requires_regeneration: '当前日报使用旧版内容，请先重新采集并生成汇总版', delivery_not_repeatable: '该渠道已接受或结果待核实，不能重复推送',
   channel_not_configured: '所选推送渠道未配置', non_workday: '该日期为非工作日，不能推送',
   storage_read_failed: '日报读取失败，请稍后重新查询', invalid_report_data: '日报数据格式异常',
   operation_storage_failed: '操作记录不可用，未接受新操作', internal_error: '操作请求处理失败',
@@ -52,7 +52,7 @@ async function request<T>(path: string, token: string, signal: AbortSignal, sche
     const allowed = response.status === 400 ? ['invalid_request', 'invalid_report_date', 'channel_not_configured', 'recipient_not_configured', 'non_workday']
       : response.status === 401 ? ['operation_unauthorized'] : response.status === 403 ? ['origin_not_allowed']
       : response.status === 404 ? ['report_not_found', 'operation_not_found']
-      : response.status === 409 ? ['idempotency_conflict', 'operation_busy', 'report_revision_changed', 'delivery_not_repeatable']
+      : response.status === 409 ? ['idempotency_conflict', 'operation_busy', 'report_revision_changed', 'report_requires_regeneration', 'delivery_not_repeatable']
       : response.status === 500 ? ['storage_read_failed', 'invalid_report_data', 'operation_storage_failed', 'internal_error'] : [];
     throw new OperationError(allowed.includes(code) ? code : 'invalid_response', allowed.includes(code) ? messages[code] : '操作响应格式异常');
   }

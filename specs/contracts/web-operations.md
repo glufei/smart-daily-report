@@ -85,7 +85,7 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 ## 4. 排他、幂等和发送时机
 
 1. 先验证 Origin/鉴权/输入，再在 SQLite 事务中查同键。规范化请求指纹包含 kind、日期，以及推送的版本/排序渠道；不包含 Token。已存在同键同指纹返回原记录；同键不同指纹为 409，不改变原状态。
-2. 无同键时，若有任意活动操作返回 409 operation_busy；不排队，不取消前一次操作。检查推送日报是否存在/有效、版本和渠道是否匹配，防止页面确认后内容改变；不检查星期或节假日。
+2. 无同键时，若有任意活动操作返回 409 operation_busy；不排队，不取消前一次操作。检查推送日报是否存在/有效、版本和渠道是否匹配，防止页面确认后内容改变；并校验已保存的 Markdown/HTML 是否由当前汇总模板生成，旧版含明细快照返回 409 report_requires_regeneration。此检查不修改快照；不检查星期或节假日。
 3. 推送前检查每个选定渠道在同日报版本的既有记录；accepted/partial_failure/unknown 或中断后的 unknown 禁止重发，返回 409 delivery_not_repeatable。明确 rejected 可在用户查看结果后用新键单独选择该渠道重提；不能附带重发成功渠道。
 4. 将运行记录与活动槽原子持久化，再返回 202 并执行后台函数。后台推送使用已校验并捕获的 DailyReport 快照，调用前持久化选定渠道为 pending；无论异常均写安全终态并释放活动槽。渠道结果必须在开始另一渠道前落盘，进程在发送后写结果前崩溃则恢复为 unknown。
 5. POST 响应丢失不表示操作未执行。前端保留该次 request_id，先 by-key 查询；未确认前不产生另一键重交。by-key 404 只表示尚无接受记录，前端可由用户显式重试**同键同内容**，禁止自动重发。刷新后可重新读取预览的渠道记录，服务端重复检查仍生效。
@@ -108,6 +108,7 @@ sources 来自同日期且同 report_revision 的生成记录；旧 CLI 历史�
 | 409 / idempotency_conflict | 同一请求标识不能用于不同操作 |
 | 409 / operation_busy | 已有操作正在执行，请先查看其结果 |
 | 409 / report_revision_changed | 日报已更新，请重新预览后推送 |
+| 409 / report_requires_regeneration | 当前日报使用旧版内容，请先重新采集并生成汇总版；不接受含明细的历史快照 |
 | 409 / delivery_not_repeatable | 该渠道已接受或结果待核实，不能重复推送 |
 | 500 / storage_read_failed | 日报读取失败，请稍后重新查询 |
 | 500 / invalid_report_data | 日报数据格式异常 |

@@ -15,6 +15,7 @@ MESSAGES = {
     "non_workday": "该日期为非工作日，不能推送",
     "channel_not_configured": "所选推送渠道未配置",
     "report_revision_changed": "日报已更新，请重新预览后推送",
+    "report_requires_regeneration": "当前日报使用旧版内容，请先重新采集并生成汇总版",
     "delivery_not_repeatable": "该渠道已接受或结果待核实，不能重复推送",
     "invalid_request": "操作参数无效",
     "recipient_not_configured": "所选邮箱不在服务器配置中",

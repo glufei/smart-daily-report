@@ -101,13 +101,16 @@ def test_pipeline_collects_generates_stores_and_delivers_both_channels(config, t
         def starttls(self, *, context=None): pass
         def login(self, *args): pass
         def send_message(self, message):
-            assert "fix" in message.get_body(("html",)).get_content()
+            body = message.get_body(("html",)).get_content()
+            assert "今日概览" in body and "fix" not in body and "Ship" not in body
             return {}
     client = httpx.Client(transport=httpx.MockTransport(handler))
     result = run_report(config, date(2026, 9, 25), client=client, smtp_factory=SMTP, sleep=lambda _: None)
     assert result.success and result.report is not None
     assert result.deliveries["email"].success and result.deliveries["lark"].success
-    assert "fix" in result.report.markdown and "Ship" in result.report.markdown and "日报 done" in result.report.markdown
+    assert "代码提交：" in result.report.markdown and "已完成任务：" in result.report.markdown
+    assert "协作沟通：" in result.report.markdown
+    assert all(value not in result.report.markdown for value in ("fix", "Ship", "日报 done"))
     assert Path(config.database_path).exists()
 
 
