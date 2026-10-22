@@ -123,8 +123,9 @@ test('disabled_failure_and_zero_records_are_distinct', async () => {
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('partial_failure'))).mockResolvedValue(response(preview)); setup(fetchMock);
   await screen.findByRole('heading', { name: '示例研发团队' });
   const member = within(screen.getByRole('article', { name: '示例成员乙' }));
-  expect(member.getByText('今日无记录')).toBeInTheDocument();
-  expect(member.getByText('未启用')).toBeInTheDocument(); expect(member.getByText('数据获取失败')).toBeInTheDocument();
+  expect(member.getByText('代码提交：0 条')).toBeInTheDocument();
+  expect(member.getByText('协作沟通：未启用')).toBeInTheDocument();
+  expect(member.getByText('已完成任务：获取失败，数量未知')).toBeInTheDocument();
 });
 
 test('lark_access_policy_denial_shows_admin_action_and_trace_log_location', async () => {
@@ -230,7 +231,9 @@ test('changing_date_before_post_reply_does_not_display_old_operation', async () 
 test('pending_source_evidence_is_not_rendered_as_empty_success', async () => {
   const preview = previewFixture(); preview.sources.github_commits.status = 'pending';
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValue(response(preview)); setup(fetchMock);
-  await screen.findByRole('heading', { name: '示例研发团队' }); expect(screen.getAllByText('正在采集…')).toHaveLength(2);
+  await screen.findByRole('heading', { name: '示例研发团队' });
+  expect(within(screen.getByRole('article', { name: '示例成员甲' })).getByText('代码提交：正在采集…')).toBeInTheDocument();
+  expect(within(screen.getByRole('list', { name: '来源状态' })).getByText('代码提交：正在采集…')).toBeInTheDocument();
 });
 
 
@@ -319,12 +322,14 @@ test('restored_delivery_is_observed_without_starting_generation_or_delivery', as
 });
 
 
-test('completed_task_shows_real_completion_without_invented_previous_status', async () => {
+test('completed_task_counts_without_disclosing_title_or_status_history', async () => {
   const preview = previewFixture(); preview.sources.lark_tasks.status = 'success';
   const task = preview.report.members[0].tasks[0]; task.status = 'completed'; task.status_from = null; task.status_to = 'completed';
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValue(response(preview)); setup(fetchMock);
   await screen.findByRole('heading', { name: '示例研发团队' });
-  expect(screen.queryByText(/— →/)).not.toBeInTheDocument(); expect(screen.getByText('完成页面契约评审（已完成）')).toBeInTheDocument();
+  expect(screen.queryByText(/— →/)).not.toBeInTheDocument();
+  expect(screen.getByText('已完成任务：1 条')).toBeInTheDocument();
+  expect(screen.queryByText(/完成页面契约评审/)).not.toBeInTheDocument();
 });
 
 
@@ -439,11 +444,12 @@ test('delivery_401_clears_token_without_retry', async () => {
   expect(screen.getByLabelText('操作令牌')).toHaveValue(''); expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument();
   expect(fetchMock.mock.calls.filter(call => call[1].method === 'POST')).toHaveLength(1);
 });
-test.each(['report_revision_changed', 'delivery_not_repeatable'])('%s requires a fresh preview before another confirmation', async code => {
+test.each(['report_revision_changed', 'report_requires_regeneration', 'delivery_not_repeatable'])('%s requires a fresh preview before another confirmation', async code => {
   const fetchMock = vi.fn().mockResolvedValueOnce(response(operationFixture('succeeded'))).mockResolvedValueOnce(response(previewFixture()))
     .mockResolvedValue(response({ error: { code, message: 'private-marker' } }, 409)); setup(fetchMock);
   await openDelivery(); fireEvent.click(screen.getByRole('button', { name: '确认推送' }));
   await waitFor(() => expect(screen.queryByRole('button', { name: '推送日报' })).not.toBeInTheDocument());
+  if (code === 'report_requires_regeneration') expect(screen.getByText('当前日报使用旧版内容，请先重新采集并生成汇总版')).toBeInTheDocument();
   expect(fetchMock.mock.calls.filter(call => call[1].method === 'POST')).toHaveLength(1);
 });
 test('history_query_invalidates_confirmation_before_different_content_is_displayed', async () => {

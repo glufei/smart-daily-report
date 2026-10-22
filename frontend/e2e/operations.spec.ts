@@ -42,8 +42,10 @@ test('generation_preview_confirmation_and_delivery', async ({ page }, info) => {
   const before = await counts(); await authenticate(page); await generate(page);
   expect(await counts()).toEqual(before);
   await expect(page.getByText('代码提交：获取成功')).toBeVisible();
-  await expect(page.getByText(/完成任务清单接入（已完成）/)).toBeVisible();
-  await expect(page.getByText('日报：完成前后端联调')).toBeVisible();
+  await expect(page.getByText('已完成任务：1 条')).toBeVisible();
+  await expect(page.getByText('协作沟通：1 条')).toBeVisible();
+  await expect(page.getByText(/完成任务清单接入（已完成）/)).toHaveCount(0);
+  await expect(page.getByText('日报：完成前后端联调')).toHaveCount(0);
   await screenshot(page, info.project.name, 'preview');
   await selectFixtureRecipient(page); await page.getByRole('button', { name: '推送日报', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('fixture@example.invalid');
@@ -131,7 +133,7 @@ test('report_updated_confirmation_invalidated_before_send', async ({ page,reques
 
 test('malicious_text_safe_and_no_secret_markers', async ({ page },info) => {
   await scenario({malicious:true}); await authenticate(page); await generate(page);
-  await expect(page.getByText('<img src=x onerror="window.attack=1">',{exact:false})).toBeVisible();
+  await expect(page.getByText('<img src=x onerror="window.attack=1">',{exact:false})).toHaveCount(0);
   expect(await page.locator('img').count()).toBe(0); expect(await page.evaluate(()=>(window as any).attack)).toBeUndefined();
   expect(await page.locator('a[href^="javascript:"]').count()).toBe(0);
   for(const marker of ['sensitive-message-marker','external-private-id','synthetic-secret']) expect(await page.content()).not.toContain(marker);

@@ -24,7 +24,7 @@ test('report layout uses a wider desktop reading column and remains within a mob
   await noOverflow(page);
 });
 
-test('real saved reports retain every member, sections, timestamps and source states', async ({ page }, info) => {
+test('real saved reports show member summaries without source details', async ({ page }, info) => {
   const requests: string[] = [];
   const bodies: string[] = [];
   page.on('request', request => { if (request.resourceType() === 'fetch') requests.push(`${request.method()} ${request.url()}`); });
@@ -32,28 +32,25 @@ test('real saved reports retain every member, sections, timestamps and source st
   await page.goto('/'); await screenshot(page, info.project.name, 'initial');
   await query(page, '2026-09-25'); await expect(page.getByRole('heading', { name: '示例研发团队' })).toBeVisible();
   await expect(page.locator('.report-meta')).toContainText('2026-09-25 18:00:00（中国标准时间，UTC+08:00）');
-  await expect(page.getByRole('region', { name: '飞书｜任务与工作消息' }).first().getByRole('time')).toHaveText([
-    '2026-09-25 18:00:00（中国标准时间，UTC+08:00）',
-    '2026-09-25 18:00:00（中国标准时间，UTC+08:00）',
-  ]);
   await expect(page.getByText(/本日报由系统自动生成/)).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(2);
   for (const name of ['示例成员甲', '示例成员乙']) {
     const member = page.getByRole('article', { name });
     await expect(member.getByRole('heading', { name, exact: true })).toBeVisible();
-    await expect(member.getByRole('heading', { level: 4 })).toHaveText(['今日总结', 'GitHub｜代码提交', '飞书｜任务与工作消息']);
-    await expect(member.getByRole('heading', { level: 5 })).toHaveText(['提交明细', '任务进展', '工作消息']);
+    await expect(member.getByRole('heading', { level: 4 })).toHaveText(['今日概览']);
+    await expect(member.getByRole('heading', { level: 5 })).toHaveCount(0);
   }
   await expect(page.locator('.summary-list li').first()).toHaveCSS('font-size', '18px');
   await expect(page.locator('.summary-note').first()).toHaveCSS('font-size', '14px');
-  await expect(page.locator('.source-group-title').first()).toHaveCSS('font-size', '20px');
-  await expect(page.locator('.records li').first()).toHaveCSS('font-size', '18px');
-  await expect(page.getByRole('article', { name: '示例成员乙' }).getByText('今日无记录')).toHaveCount(3);
+  await expect(page.getByRole('article', { name: '示例成员乙' }).getByText(/0 条/)).toHaveCount(3);
+  await expect(page.locator('.member').first()).not.toContainText('修正日期选择交互');
+  await expect(page.locator('.member').first()).not.toContainText('完成页面契约评审');
+  await expect(page.locator('.member').first()).not.toContainText('日报：已完成只读页面原型');
   await screenshot(page, info.project.name, 'normal');
   await query(page, '2026-09-26'); await expect(page.getByText('部分数据源获取失败：任务进展')).toBeVisible();
-  for (const name of ['示例成员甲', '示例成员乙']) await expect(page.getByRole('article', { name }).getByText('数据获取失败', { exact: true })).toBeVisible();
+  for (const name of ['示例成员甲', '示例成员乙']) await expect(page.getByRole('article', { name }).getByText('已完成任务：获取失败，数量未知')).toBeVisible();
   await screenshot(page, info.project.name, 'source-failure');
-  await query(page, '2026-09-30'); await expect(page.getByRole('article').getByText('今日无记录')).toHaveCount(6);
+  await query(page, '2026-09-30'); await expect(page.getByRole('article').getByText(/0 条/)).toHaveCount(6);
   await screenshot(page, info.project.name, 'empty-records');
   expect(requests).toHaveLength(3);
   expect(requests.every(value => /^GET http:\/\/127\.0\.0\.1:8765\/api\/v1\/reports\//.test(value))).toBe(true);
@@ -105,9 +102,9 @@ test('late real A response cannot overwrite B or hide B source failure', async (
   await expect(page.getByText('部分数据源获取失败：任务进展')).toBeVisible();
 });
 
-test('malicious records remain text, links remain safe, long content wraps', async ({ page }, info) => {
+test('malicious source content is absent from the summary', async ({ page }, info) => {
   await page.goto('/'); await query(page, '2026-09-29');
-  await expect(page.getByText('<img src=x onerror="window.attack=1">', { exact: false })).toBeVisible();
+  await expect(page.getByText('<img src=x onerror="window.attack=1">', { exact: false })).toHaveCount(0);
   await expect(page.locator('img')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).attack)).toBeUndefined();
   expect(await page.locator('a[href]').count()).toBe(0);

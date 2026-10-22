@@ -1,249 +1,85 @@
+from dataclasses import replace
 from datetime import date, datetime, timezone
+from html.parser import HTMLParser
 
+import markdown
 import pytest
 
 from smart_daily_report.generator.formatter import generate_daily_report
 from smart_daily_report.shared.models import MemberReport
 
 
-def test_three_sections_show_records_empty_and_source_failure(records):
-    member = MemberReport("u1", "张三", [records["commit"]], [], [records["message"]], {})
-    statuses = {"github_commits": "success", "lark_tasks": "success", "lark_messages": "failure"}
-    report = generate_daily_report(date(2026, 9, 25), "team", [member], statuses, datetime.now(timezone.utc))
-    assert report.markdown.index("## GitHub｜代码提交") < report.markdown.index("### 提交明细")
-    assert report.markdown.index("## 飞书｜任务与工作消息") < report.markdown.index("### 任务进展") < report.markdown.index("### 工作消息")
-    assert "fix bug" in report.markdown and "今日无记录" in report.markdown and "数据获取失败" in report.markdown
+STATUSES = {"github_commits": "success", "lark_tasks": "success", "lark_messages": "success"}
+DAY = date(2026, 9, 25)
+GENERATED = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc)
 
 
-def test_member_summary_counts_records_before_preserving_source_details(records):
-    from html.parser import HTMLParser
-
-    class TextContent(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.parts = []
-
-        def handle_data(self, data):
-            self.parts.append(data)
-
-    member = MemberReport("u1", "张三", [records["commit"]], [records["task"]], [records["message"]])
-    report = generate_daily_report(date(2026, 9, 25), "team", [member], {
-        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
-    }, datetime.now(timezone.utc))
-    expected = ("代码提交：1 条", "已完成任务：1 条", "协作沟通：1 条")
-
-    assert report.markdown.index("## 今日总结") < report.markdown.index("## GitHub｜代码提交") < report.markdown.index("### 提交明细")
-    assert report.markdown.index("## 飞书｜任务与工作消息") < report.markdown.index("### 任务进展") < report.markdown.index("### 工作消息")
-    assert all(line in report.markdown for line in expected)
-    assert "fix bug" in report.markdown
-    assert "Ship（done）" in report.markdown
-    assert "日报完成" in report.markdown
-
-    parsed = TextContent()
-    parsed.feed(report.html)
-    html_text = "".join(parsed.parts)
-    assert html_text.index("今日概览") < html_text.index("GitHub｜代码提交")
-    assert all(line.replace("：", "") in html_text for line in expected)
-    assert "acme/repo" in html_text and "fix bug" in html_text and "Ship" in html_text and "日报完成" in html_text
+def make_report(members, statuses=STATUSES):
+    return generate_daily_report(DAY, "team", members, statuses, GENERATED)
 
 
-def test_email_sections_separate_summary_platforms_and_record_metadata(records):
-    member = MemberReport("u1", "张三", [records["commit"]], [records["task"]], [records["message"]])
-    report = generate_daily_report(date(2026, 9, 25), "team", [member], {
-        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
-    }, datetime.now(timezone.utc))
+def test_shared_report_outputs_do_not_disclose_source_details(records):
+    secret = "classified-project-marker"
+    member = MemberReport("u1", "张三", [replace(records["commit"], message=secret, repository=secret,
+                                               url="https://example.test/private-commit")],
+                          [replace(records["task"], title=secret, url="https://example.test/private-task")],
+                          [replace(records["message"], content=secret, chat_name=secret)])
+    report = make_report([member])
 
-    email = report.html
-    assert '<table role="presentation"' in email
-    assert 'width="860"' in email and 'max-width:860px' in email
-    assert "高畅智能日报" in email
-    assert "今日概览" in email and email.count("1 条") >= 3
-    assert "GitHub｜代码提交（1 条）" in email
-    assert "飞书｜任务与工作消息" in email
-    assert '<strong>fix bug</strong>' in email
-    assert "acme/repo · 2026-09-25 18:00:00（中国标准时间，UTC+08:00） · +0 / −0 · 0 个文件" in email
-    china_time = "2026-09-25 18:00:00（中国标准时间，UTC+08:00）"
-    assert '<strong>Ship</strong>' in email and f"状态：done · {china_time}" in email
-    assert '<strong>日报完成</strong>' in email and f"时间：{china_time}" in email
+    for output in (report.markdown, report.html):
+        assert all(label in output for label in ("代码提交", "已完成任务", "协作沟通", "1 条"))
+        assert all(marker not in output for marker in (secret, "private-commit", "private-task"))
+    assert report.members[0].commits[0].message == secret
 
 
-def test_email_shows_china_generation_time_to_distinguish_regenerations(records):
-    member = MemberReport("u1", "高畅", [records["commit"]])
-    statuses = {"github_commits": "success", "lark_tasks": "success", "lark_messages": "failure"}
-    generated_at = datetime(2026, 10, 13, 13, 0, tzinfo=timezone.utc)
-    html = generate_daily_report(date(2026, 10, 13), "team", [member], statuses,
-                                 generated_at=generated_at).html
-
-    assert "生成时间：2026-10-13 21:00:00（中国标准时间，UTC+08:00）" in html
-    assert "数据获取失败，数量未知" in html
-
-
-def test_email_preserves_chat_name_as_safe_literal_text(records):
-    from dataclasses import replace
-    from html.parser import HTMLParser
-    class VisibleText(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.parts = []
-        def handle_data(self, data): self.parts.append(data)
-    chat_name = '研发 & <测试>群'
-    member = MemberReport("u1", "Member", messages=[replace(records["message"], chat_name=chat_name)])
-    report = generate_daily_report(date(2026, 9, 25), "team", [member], {}, records["message"].sent_at)
-    visible = VisibleText()
-    visible.feed(report.html)
-    assert chat_name in ''.join(visible.parts)
-    assert '<测试>' not in report.html, "Group labels must stay text rather than HTML markup"
+def test_summary_preserves_zero_vs_unknown_and_date(records):
+    member = MemberReport("u1", "张三", [records["commit"]])
+    report = make_report([member], {"github_commits": "success", "lark_tasks": "failure", "lark_messages": "success"})
+    assert report.markdown.startswith("# 高畅智能日报（2026-09-25）")
+    assert "代码提交：1 条" in report.markdown
+    assert "已完成任务：获取失败，数量未知" in report.markdown
+    assert "协作沟通：0 条" in report.markdown
+    assert "已完成任务：0 条" not in report.markdown
+    assert "获取失败，数量未知" in report.html
 
 
-def test_single_member_report_avoids_repeated_identity_and_prioritizes_summary(records):
-    member = MemberReport("u1", "Chang GAO", [records["commit"]])
-    report = generate_daily_report(date(2026, 10, 12), "Chang GAO", [member], {
-        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
-    }, datetime.now(timezone.utc))
-
-    assert report.markdown.startswith("# 高畅智能日报（2026-10-12）\n")
-    assert report.markdown.count("\n---\n") >= 2
-    assert "## Chang GAO" not in report.markdown
-    assert report.markdown.index("## 今日总结") < report.markdown.index("## GitHub｜代码提交")
-    assert 'font-size:16px;line-height:1.6;color:#243247' in report.html
-    assert "报告日期：2026-10-12" in report.html
-    assert "高畅智能日报" in report.html
+def test_email_has_clear_overview_and_china_generation_time_without_record_metadata(records):
+    report = make_report([MemberReport("u1", "张三", [records["commit"]], [records["task"]], [records["message"]])])
+    assert '<table role="presentation"' in report.html
     assert 'width="860"' in report.html and 'max-width:860px' in report.html
-    assert "Chang GAO 日报" not in report.html
-    assert "<h2>Chang GAO</h2>" not in report.html
-    assert report.html.index("今日概览") < report.html.index("GitHub｜代码提交")
-
-    multi_member = generate_daily_report(date(2026, 10, 12), "Chang GAO", [member, MemberReport("u2", "Li Hua")], {
-        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
-    }, datetime.now(timezone.utc))
-    assert "## Chang GAO" in multi_member.markdown
-    assert '<h2 style="margin:0;font-size:21px' in multi_member.html and ">Chang GAO</h2>" in multi_member.html
+    assert "今日概览" in report.html
+    assert "生成时间：2026-09-25 18:00:00（中国标准时间，UTC+08:00）" in report.html
+    assert report.html.count("1 条") == 3
+    assert all(value not in report.html for value in ("fix bug", "Ship", "日报完成", "acme/repo",
+                                                      "href=", "个文件"))
 
 
-def test_member_summary_distinguishes_zero_records_from_failed_source():
-    from html.parser import HTMLParser
-
-    class TextContent(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.parts = []
-
-        def handle_data(self, data):
-            self.parts.append(data)
-
-    member = MemberReport("u1", "张三")
-    report = generate_daily_report(date(2026, 9, 25), "team", [member], {
-        "github_commits": "failure", "lark_tasks": "success", "lark_messages": "success",
-    }, datetime.now(timezone.utc))
-    failure_count = "代码提交：获取失败，数量未知"
-    zero_counts = ("已完成任务：0 条", "协作沟通：0 条")
-
-    assert failure_count in report.markdown
-    assert all(line in report.markdown for line in zero_counts)
-    assert "代码提交：0 条" not in report.markdown
-
-    parsed = TextContent()
-    parsed.feed(report.html)
-    html_text = "".join(parsed.parts)
-    assert "代码提交获取失败，数量未知" in html_text
-    assert all(line.replace("：", "") in html_text for line in zero_counts)
-    assert "代码提交0 条" not in html_text
+def test_multi_member_identity_is_safe_but_single_member_is_not_repeated(records):
+    name = "<img> [链接](https://injected.invalid)"
+    member = MemberReport("u1", name, [replace(records["commit"], message="<script>x</script>")])
+    single = make_report([member])
+    assert f"## {name}" not in single.markdown
+    assert name not in single.html
+    assert "<script>" not in single.html
+    multi = make_report([member, MemberReport("u2", "李四")])
+    assert "&lt;img&gt;" in multi.html and "&lt;script&gt;" not in multi.html
+    parsed = HTMLParser()
+    parsed.feed(markdown.markdown(multi.markdown))
+    assert "https://injected.invalid" not in multi.markdown
+    assert "href=" not in markdown.markdown(multi.markdown)
 
 
-def test_report_groups_details_by_platform_and_labels_automated_summary(records):
-    member = MemberReport("u1", "张三", [records["commit"]], [records["task"]], [records["message"]])
-    report = generate_daily_report(date(2026, 9, 25), "team", [member], {
-        "github_commits": "success", "lark_tasks": "success", "lark_messages": "success",
-    }, datetime.now(timezone.utc))
-
-    markdown = report.markdown
-    assert "系统自动生成" in markdown
-    assert "系统自动统计" in markdown
-    assert "## GitHub｜代码提交" in markdown
-    assert markdown.index("## GitHub｜代码提交") < markdown.index("fix bug")
-    assert "## 飞书｜任务与工作消息" in markdown
-    assert markdown.index("## 飞书｜任务与工作消息") < markdown.index("### 任务进展") < markdown.index("Ship（done）")
-    assert markdown.index("### 工作消息") < markdown.index("日报完成")
-
-    from html.parser import HTMLParser
-
-    class Headings(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.tags, self.text = [], []
-            self.in_heading = False
-        def handle_starttag(self, tag, attrs):
-            if tag in {"h1", "h2", "h3", "h4"}:
-                self.tags.append(tag)
-                self.in_heading = True
-        def handle_endtag(self, tag):
-            if tag in {"h1", "h2", "h3", "h4"}:
-                self.in_heading = False
-        def handle_data(self, data):
-            if self.in_heading:
-                self.text.append(data)
-
-    parsed = Headings()
-    parsed.feed(report.html)
-    assert "按成功采集的记录汇总" in report.html
-    assert parsed.text == ["报告日期：2026-09-25", "今日概览", "GitHub｜代码提交（1 条）",
-                           "飞书｜任务与工作消息", "任务进展 · 1 条", "工作消息 · 1 条"]
-    assert parsed.tags == ["h1", "h2", "h2", "h2", "h3", "h3"]
-
-
-def test_html_escapes_untrusted_content(records):
-    from dataclasses import replace
-    member = MemberReport("u1", "<img>", [replace(records["commit"], message="<script>x</script>", url='javascript:alert(1)')])
-    report = generate_daily_report(date(2026, 9, 25), "<team>", [member, MemberReport("u2", "safe")], {}, datetime.now(timezone.utc))
-    assert "&lt;script&gt;" in report.html and "&lt;img&gt;" in report.html
-    assert 'href="javascript:alert(1)"' not in report.html
+def test_generated_markdown_contains_only_one_summary_section_per_member(records):
+    report = make_report([MemberReport("u1", "张三", [records["commit"]]),
+                          MemberReport("u2", "李四", messages=[records["message"]])])
+    rendered = markdown.markdown(report.markdown)
+    assert rendered.count("<h2>") == 2
+    assert rendered.count("<h3>今日概览</h3>") == 2
+    assert "提交明细" not in rendered and "工作消息" not in rendered
+    assert "代码提交：1 条" in report.markdown
+    assert "协作沟通：1 条" in report.markdown
 
 
 def test_all_failed_sources_cannot_create_report():
     with pytest.raises(ValueError):
-        generate_daily_report(date.today(), "team", [], {"github_commits": "failure"}, datetime.now(timezone.utc))
-
-
-def test_markdown_external_text_is_literal_without_extra_links_or_structure(records):
-    from dataclasses import replace
-    from html.parser import HTMLParser
-    import markdown
-    class Parsed(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.tags, self.hrefs, self.text = [], [], []
-        def handle_starttag(self, tag, attrs):
-            self.tags.append(tag)
-            self.hrefs.extend(value for name, value in attrs if name == 'href')
-        def handle_data(self, data):
-            self.text.append(data)
-    text = '[核对](https://injected.invalid) **bold** <at id=all></at> &amp;\n# injected heading'
-    member = MemberReport('u1', text, [replace(records['commit'], message=text)],
-        [replace(records['task'], title=text, url='https://example.test/task')],
-        [replace(records['message'], content=text)])
-    report = generate_daily_report(date(2026, 9, 25), text, [member], {}, datetime.now(timezone.utc))
-    rendered = Parsed()
-    rendered.feed(markdown.markdown(report.markdown))
-    assert rendered.tags.count('h1') == 1 and rendered.tags.count('h2') == 3
-    assert rendered.tags.count('h3') == 3 and rendered.tags.count('h4') == 0
-    assert rendered.hrefs == ['https://example.test/commit', 'https://example.test/task']
-    assert not any(tag in rendered.tags for tag in ['strong', 'em', 'at', 'img'])
-    assert ''.join(rendered.text).count(text) == 3
-    assert report.members[0].messages[0].content == text
-
-
-def test_markdown_link_destination_cannot_break_out_into_an_extra_link(records):
-    from dataclasses import replace
-    from html.parser import HTMLParser
-    import markdown
-    class Links(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.hrefs = []
-        def handle_starttag(self, tag, attrs):
-            self.hrefs.extend(value for name, value in attrs if tag == 'a' and name == 'href')
-    member = MemberReport('u1', 'A', [replace(records['commit'], url='https://example.test/path)[injected](https://injected.invalid)')])
-    report = generate_daily_report(date(2026, 9, 25), 'team', [member], {}, datetime.now(timezone.utc))
-    rendered = Links()
-    rendered.feed(markdown.markdown(report.markdown))
-    assert rendered.hrefs == ['https://example.test/path%29%5Binjected%5D%28https://injected.invalid%29']
+        make_report([], {"github_commits": "failure"})

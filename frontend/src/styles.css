@@ -56,6 +56,9 @@ a:hover { color:var(--accent); }
 .report-meta dt { font-size:14px; color:var(--muted); }
 .report-meta dd { margin:0; font:15px/1.6 var(--font-mono); font-variant-numeric:tabular-nums; }
 .source-status { list-style:none; display:flex; flex-wrap:wrap; gap:8px 20px; padding:0; margin:14px 0 0; color:var(--muted); font-size:15px; }
+.source-status li { padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:#f6f8fb; }
+.source-status li[data-status="success"] { color:#27634f; background:#edf7f2; border-color:#c6e5d4; }
+.source-status li[data-status="failure"] { color:var(--danger); background:#fdf0ed; border-color:#e6aaa7; }
 .banner { border:1px solid #dfbc93; background:#fff6ea; border-radius:8px; padding:14px 16px; }
 .banner strong { color:var(--warn); font-size:14px; }
 .banner p { color:var(--muted); font-size:13px; margin-top:4px; }
@@ -65,21 +68,6 @@ a:hover { color:var(--accent); }
 .summary-list { list-style:none; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; padding:0; }
 .summary-list li { font-size:18px; line-height:1.7; padding:10px 12px; background:#f3f6fa; border:1px solid var(--border); border-radius:8px; }
 .summary-note { margin:0 0 8px; color:var(--muted); font-size:14px; line-height:1.7; }
-.member-summary + .source-group { margin-top:18px; }
-.source-group + .source-group { margin-top:14px; }
-.source-group { border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; background:#fbfcfe; padding:18px; }
-.source-group[aria-label^="飞书"] { border-left-color:#42806c; background:#f9fcfa; }
-.source-group[aria-label^="飞书"] .source-group-title { color:#27634f; }
-.source-group-title { margin:0 0 12px; color:var(--accent); font-size:20px; }
-.source-group .block { margin:0; padding:0; border:0; }
-.source-group .block + .block { border-top:1px solid var(--border); margin-top:14px; padding-top:14px; }
-.source-group .block-label { margin-bottom:8px; color:var(--fg); font-size:16px; }
-.records { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-.records li { font-size:18px; line-height:1.7; white-space:pre-wrap; padding:10px 12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
-.records small { display:block; margin-top:4px; font-size:14px; line-height:1.6; color:var(--muted); }
-.record-empty { color:var(--muted); font-size:18px; line-height:1.7; }
-.record-failed { color:var(--danger); background:#fdf0ed; border:1px solid #e6aaa7; border-radius:8px; padding:10px 12px; font-size:18px; line-height:1.7; font-weight:500; }
-.code { font-family:var(--font-mono); font-size:.92em; background:#f3f4f5; border:1px solid var(--border); border-radius:5px; padding:1px 6px; }
 .report,.state-card,.pagefoot { overflow-wrap:anywhere; }
 .pagefoot { padding-block:24px; border-top:1px solid var(--border); }
 .pagefoot .container { display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; font-size:13px; }

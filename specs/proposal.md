@@ -1,7 +1,8 @@
 # 智能日报生成器需求规范（Proposal）
 
-- 当前维护版本：v1.6.6；修复经过见 [`2026-10-14 项目审查`](../docs/project-audit-2026-10-14.md)，当前测试见 [`2026-10-20 验证记录`](../docs/project-verification-2026-10-20.md)。
+- 当前代码版本：v1.7.0（尚未发布 Release）；汇总版边界与验证见 [`汇总版变更与验证`](../docs/frontend/summary-only-report.md)。v1.6.6 修复与测试见 [`2026-10-14 项目审查`](../docs/project-audit-2026-10-14.md)、[`2026-10-20 验证记录`](../docs/project-verification-2026-10-20.md)，作为历史证据保留。
 - 历史功能基线：v1.5.0 已发布；涵盖 Task25–27 的每日日期规则、报告分组及时区显示。更早版本记录保留为历史证据。
+- 当前内容规则：网页、邮件 HTML 与飞书 Markdown 仅显示成员的三项数量及来源状态；逐条记录和链接保留在本机 SQLite/API，报告不展示。旧版已存快照未经重新生成不得再次推送。此规则取代下文 v1.4/v1.5 历史阶段的“汇总＋明细”展示要求。
 - 状态：Task15–27 及 R01–R12 的既有验收记录保留；Task25–27 已完成实现和回归，并由 PR #8 交付。历史发布记录见 `docs/frontend/v1.4.0-release.md`；日期规则、网页摘要和来源分组/时区记录分别见 `docs/frontend/daily-generation-calendar-tdd.md`、`docs/frontend/report-summary-web-tdd.md` 和 `docs/frontend/report-layout-timezone-tdd.md`。
 - 方法：依据《SDD 实战：规范驱动开发之道》第 4 章案例，并纳入本项目明确提出的约束
 

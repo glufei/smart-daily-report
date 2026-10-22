@@ -1,26 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent, ReactNode, RefObject } from 'react';
+import type { FormEvent, RefObject } from 'react';
 import type { PreviewView } from './operations';
 import { OperationPanel } from './OperationPanel';
-import { queryReport, safeUrl, validDate } from './api';
+import { queryReport, validDate } from './api';
 import type { QueryResult, Report, SourceStatus } from './api';
 import { formatChinaTimestamp } from './time';
 
 type View = { kind: 'initial' } | { kind: 'loading' } | (QueryResult & { date: string });
 const sources = [['github_commits', '代码提交'], ['lark_tasks', '任务进展'], ['lark_messages', '协作沟通']] as const;
-
-function RecordLink({ url, children }: { url: string | null; children: ReactNode }) {
-  const href = safeUrl(url);
-  return href ? <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> : <>{children}</>;
-}
-function Section({ title, status, children, empty }: {
-  title: string; status: SourceStatus[keyof SourceStatus] | 'disabled' | 'pending'; children: ReactNode; empty: boolean;
-}) {
-  return <section className="block"><h5 className="block-label">{title}</h5>
-    {status === 'disabled' ? <p className="record-empty">未启用</p> : status === 'pending' ? <p>正在采集…</p> : status === 'failure' ? <p className="record-failed">数据获取失败</p>
-      : empty ? <p className="record-empty">今日无记录</p> : <ul className="records">{children}</ul>}
-  </section>;
-}
 
 function ReportContent({ report, sources: outcomes, headingRef }: { report: Report; sources?: PreviewView['sources']; headingRef?: RefObject<HTMLHeadingElement | null> }) {
   const status = (key: keyof SourceStatus) => outcomes?.[key]?.status ?? report.source_status[key];
@@ -34,40 +21,23 @@ function ReportContent({ report, sources: outcomes, headingRef }: { report: Repo
   const failures = sources.filter(([key]) => status(key) === 'failure').map(([, label]) => label);
   return <div className="report">
     {failures.length > 0 && <div className="banner" role="status"><strong>部分数据源获取失败：{failures.join('、')}</strong>
-      <p>日报已加载，对应板块显示“数据获取失败”。</p></div>}
+      <p>对应统计项的数量未知，其余成功来源仍可查看。</p></div>}
     {outcomes === null && <p>来源启用情况未记录</p>}
     <header className="report-head"><h2 ref={headingRef} tabIndex={-1} className="report-team">{report.team_name}</h2>
-      <p className="report-origin-note">本日报由系统自动生成，内容依据已配置并成功采集的数据。</p>
+      <p className="report-origin-note">本日报由系统自动生成，只展示汇总统计，不展示工作细节。</p>
       <dl className="report-meta"><div><dt>报告日期</dt><dd>{report.report_date}</dd></div>
         <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{formatChinaTimestamp(report.generated_at)}</time></dd></div></dl>
-      <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
+      <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key} data-status={status(key)}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
     </header>
     <div className="members">{report.members.map(member => <article className="member" key={member.member_id} aria-label={member.display_name}>
       {report.members.length > 1 && <h3 className="member-name">{member.display_name}</h3>}<div className="blocks">
-        <section className="block member-summary" aria-label="今日总结"><h4 className="block-label">今日总结</h4>
-          <p className="summary-note">系统自动统计：仅依据下方成功采集的记录，不作人工编辑或 AI 推断。</p>
+        <section className="block member-summary" aria-label="今日概览"><h4 className="block-label">今日概览</h4>
+          <p className="summary-note">仅依据成功采集的记录统计；代码提交来自 GitHub，任务与协作沟通来自飞书。</p>
           <ul className="summary-list">
             <li>代码提交：{summaryValue('github_commits', member.commits.length)}</li>
             <li>已完成任务：{summaryValue('lark_tasks', member.tasks.length)}</li>
             <li>协作沟通：{summaryValue('lark_messages', member.messages.length)}</li>
           </ul>
-        </section>
-        <section className="source-group" aria-label="GitHub｜代码提交">
-          <h4 className="source-group-title">GitHub｜代码提交</h4>
-          <Section title="提交明细" status={status('github_commits')} empty={member.commits.length === 0}>
-            {member.commits.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}><span className="code">{record.repository}</span>：{record.message}</RecordLink>
-              <small><time dateTime={record.committed_at}>{formatChinaTimestamp(record.committed_at)}</time> · +{record.additions} / −{record.deletions} · {record.files_changed} 个文件</small></li>)}
-          </Section>
-        </section>
-        <section className="source-group" aria-label="飞书｜任务与工作消息">
-          <h4 className="source-group-title">飞书｜任务与工作消息</h4>
-          <Section title="任务进展" status={status('lark_tasks')} empty={member.tasks.length === 0}>
-            {member.tasks.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.title}（{record.status === 'completed' ? '已完成' : record.status}）</RecordLink>
-              <small><time dateTime={record.changed_at}>{formatChinaTimestamp(record.changed_at)}</time>{record.status_from !== null && record.status_to !== null ? ` · ${record.status_from} → ${record.status_to}` : ''}</small></li>)}
-          </Section>
-          <Section title="工作消息" status={status('lark_messages')} empty={member.messages.length === 0}>
-            {member.messages.map((record, index) => <li key={`${record.record_id}-${index}`}><RecordLink url={record.url}>{record.content}</RecordLink><small><time dateTime={record.sent_at}>{formatChinaTimestamp(record.sent_at)}</time>{record.chat_name ? ` · ${record.chat_name}` : ''}</small></li>)}
-          </Section>
         </section>
       </div>
     </article>)}</div>

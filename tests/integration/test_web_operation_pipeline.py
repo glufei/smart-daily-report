@@ -429,6 +429,24 @@ def test_preview_revision_changed_rejects_before_notifier(config,tmp_path):
     assert requests==[] and sends==[]
 
 
+@pytest.mark.parametrize('field', ['markdown', 'html'])
+def test_legacy_detail_snapshot_cannot_be_delivered_even_after_preview(config,tmp_path,field):
+    from pathlib import Path
+    from smart_daily_report.shared.storage import get_report,write_report
+    from smart_daily_report.web.operation_schemas import DeliveryRequest
+    from smart_daily_report.web.operations import OperationError
+    service,store,cfg,_,requests,sends=delivery_service(config,tmp_path)
+    path=Path(cfg.database_path)
+    report=get_report(path,date(2026,9,25))
+    write_report(path,replace(report,**{field: getattr(report,field)+"\n- Ship actual work\n"}))
+    preview=service.preview(date(2026,9,25))
+    with pytest.raises(OperationError,match='report_requires_regeneration'):
+        service.accept_delivery(DeliveryRequest(report_date=date(2026,9,25),
+            report_revision=preview.report_revision,channels=['email'],email_recipients=['lead@test']),str(uuid4()))
+    assert requests==[] and sends==[]
+    assert store.current() is None or store.current()['kind']!='delivery'
+
+
 def test_delivery_acceptance_keeps_snapshot_and_never_recollects(config,tmp_path):
     from smart_daily_report.web.operation_schemas import DeliveryRequest
     service,store,cfg,preview,requests,sends=delivery_service(config,tmp_path)

@@ -1,9 +1,9 @@
 # 智能日报生成器架构设计（Design）
 
-- 当前维护版本：v1.6.6；修复经过见 [`2026-10-14 项目审查`](../docs/project-audit-2026-10-14.md)，当前测试与文档校准见 [`2026-10-20 验证记录`](../docs/project-verification-2026-10-20.md)。
+- 当前代码版本：v1.7.0（尚未发布 Release）；汇总版设计与验证见 [`汇总版变更与验证`](../docs/frontend/summary-only-report.md)。v1.6.6 修复与测试见 [`2026-10-14 项目审查`](../docs/project-audit-2026-10-14.md)、[`2026-10-20 验证记录`](../docs/project-verification-2026-10-20.md)，作为历史证据保留。
 - 维护状态：v1.3.0 通过 PR #4 发布；v1.3.1 通过 PR #5 合并并发布；v1.4.0 已发布，记录见 `docs/frontend/v1.4.0-release.md`。
 - 变更状态：Task25–27 的实现、自动化回归及真实 Task26 仓库采集/页面核对均已完成，随 v1.5.0 发布。
-- 状态：Task15–27及R01–R12的历史验收证据保留；只读 API、Python 包及前端包版本统一为1.6.6。
+- 状态：Task15–27及R01–R12的历史验收证据保留；Python 包及前端包版本统一为 1.7.0，本机只读 API 字段契约不变。
 - 上游：[`proposal.md`](proposal.md)
 - 接口契约：[`contracts/interfaces.md`](contracts/interfaces.md)、[`contracts/data-models.md`](contracts/data-models.md)、[`contracts/http-api.md`](contracts/http-api.md)（v1.1 只读基线）、[`contracts/web-operations.md`](contracts/web-operations.md)（v1.2 操作基线与 v1.3 增量均已实现）
 - 配套来源：作者的[官方章节代码仓库](https://github.com/huangjia2019/sdd-in-action)；当前规范保留原书模型字段，并针对本项目验收要求增加身份键、来源状态和安全诊断字段。
@@ -24,7 +24,7 @@ GitHub ─────┐
 | 模块 | 负责 | 不负责 |
 |---|---|---|
 | `collector/` | GitHub 提交、飞书任务和消息的 API 访问、分页、源数据解析；每个来源独立返回成功/失败结果 | 身份聚合、日报格式、推送 |
-| `generator/` | 接收聚合后的成员报告，确定性生成成员数量总结及三类来源明细的 Markdown 和 HTML | 外部 API 调用、秘密读取、消息采集、AI 自然语言推断 |
+| `generator/` | 接收聚合后的成员报告，确定性生成仅含成员数量概览的 Markdown 和 HTML | 外部 API 调用、秘密读取、消息采集、AI 自然语言推断 |
 | `notifier/` | 将既有 DailyReport 分别发送至 SMTP 与飞书机器人并报告投递结果 | 数据采集、内容生成、SQLite 查询 |
 | `shared/` | 配置与账号映射校验、敏感词过滤、错误类型、JSON 日志、SQLite 存储、共享 HTTP 策略 | 具体数据源业务与日报模板 |
 | `main.py` | 命令行入口、确定性编排、部分失败降级、退出码 | 将业务判断委托给模型或隐藏在模块副作用中 |
@@ -39,6 +39,10 @@ GitHub ─────┐
 ### 1.8 React 网页摘要与仓库配置维护（Task26，v1.5.0 已发布）
 
 React 使用同一份历史 GET/预览 DTO，在成员的来源明细前按记录数组长度与来源状态渲染“今日总结”；成功来源显示逐成员记录数量，失败来源显示“获取失败，数量未知”，禁用和采集中使用各自状态。页面不另发请求、不引入新 API/数据模型/持久化字段。已保存报告是生成时的快照：改动 `team.github_repositories` 不会回填旧报告，必须让后端重新加载配置并重新采集生成。Task26 验收时的本机列表包含 `glufei/Lab-Attendance-System` 与 `glufei/smart-daily-report`；新环境以自己的私有配置为准。
+
+### 1.9 当前汇总版内容边界（v1.7.0，尚未发布 Release）
+
+上述 v1.4/v1.5 的“汇总＋明细”是历史设计。当前网页、邮件 HTML 和飞书 Markdown 只显示每位成员的三项计数、报告日期/生成时间及来源状态；不输出提交/任务/消息的逐条文字、链接、时间或原始 ID。计数由原结构化记录和来源状态确定性计算，不让模型生成评价性文字。采集、过滤、SQLite 历史记录和本机 GET/预览 DTO 仍保留原始字段，网页 DOM 隐藏细节并不等于 API 脱敏；本机服务边界不变。旧 Markdown/HTML 快照若不符合当前模板，操作模式拒绝推送并要求重新生成与预览。
 
 ### 1.2 v1.1 前后端分离（历史设计，继续约束只读模式）
 
