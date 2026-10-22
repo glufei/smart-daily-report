@@ -126,6 +126,10 @@ test('disabled_failure_and_zero_records_are_distinct', async () => {
   expect(member.getByText('代码提交：0 条')).toBeInTheDocument();
   expect(member.getByText('协作沟通：未启用')).toBeInTheDocument();
   expect(member.getByText('已完成任务：获取失败，数量未知')).toBeInTheDocument();
+  expect(member.getByText('已获取记录合计：0 条')).toBeInTheDocument();
+  expect(member.getByText('有记录类别：0 项')).toBeInTheDocument();
+  expect(member.getByText('1 类来源获取失败，未计入合计')).toBeInTheDocument();
+  expect(member.getByText('未启用或正在采集的来源未计入合计')).toBeInTheDocument();
 });
 
 test('lark_access_policy_denial_shows_admin_action_and_trace_log_location', async () => {

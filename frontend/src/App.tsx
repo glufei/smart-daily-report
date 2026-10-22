@@ -29,18 +29,36 @@ function ReportContent({ report, sources: outcomes, headingRef }: { report: Repo
         <div><dt>生成时间</dt><dd><time dateTime={report.generated_at}>{formatChinaTimestamp(report.generated_at)}</time></dd></div></dl>
       <ul className="source-status" aria-label="来源状态">{sources.map(([key, label]) => <li key={key} data-status={status(key)}>{label}：{status(key) === 'disabled' ? '未启用' : status(key) === 'pending' ? '正在采集…' : status(key) === 'success' ? '获取成功' : '数据获取失败'}</li>)}</ul>
     </header>
-    <div className="members">{report.members.map(member => <article className="member" key={member.member_id} aria-label={member.display_name}>
+    <div className="members">{report.members.map(member => {
+      const counts = [
+        { key: 'github_commits' as const, label: '代码提交', count: member.commits.length },
+        { key: 'lark_tasks' as const, label: '已完成任务', count: member.tasks.length },
+        { key: 'lark_messages' as const, label: '协作沟通', count: member.messages.length },
+      ];
+      const known = counts.filter(item => status(item.key) === 'success');
+      const failed = counts.filter(item => status(item.key) === 'failure').length;
+      const maximum = Math.max(0, ...known.map(item => item.count));
+      return <article className="member" key={member.member_id} aria-label={member.display_name}>
       {report.members.length > 1 && <h3 className="member-name">{member.display_name}</h3>}<div className="blocks">
         <section className="block member-summary" aria-label="今日概览"><h4 className="block-label">今日概览</h4>
           <p className="summary-note">仅依据成功采集的记录统计；代码提交来自 GitHub，任务与协作沟通来自飞书。</p>
+          <p className="summary-total">已获取记录合计：{known.reduce((sum, item) => sum + item.count, 0)} 条</p>
+          <p className="summary-note">有记录类别：{known.filter(item => item.count > 0).length} 项</p>
+          {failed > 0 && <p className="summary-caveat">{failed} 类来源获取失败，未计入合计</p>}
+          {counts.some(item => status(item.key) === 'disabled' || status(item.key) === 'pending') &&
+            <p className="summary-caveat">未启用或正在采集的来源未计入合计</p>}
           <ul className="summary-list">
-            <li>代码提交：{summaryValue('github_commits', member.commits.length)}</li>
-            <li>已完成任务：{summaryValue('lark_tasks', member.tasks.length)}</li>
-            <li>协作沟通：{summaryValue('lark_messages', member.messages.length)}</li>
+            {counts.map(item => <li key={item.key}>{item.label}：{summaryValue(item.key, item.count)}</li>)}
           </ul>
+          <p className="summary-chart-title">记录数量对比</p>
+          <ul className="summary-chart" aria-label="记录数量对比">{counts.map(item => <li key={item.key}>
+            <span>{item.label}</span><span className="summary-track" aria-hidden="true"><span style={{ width: status(item.key) === 'success' && item.count > 0 && maximum > 0 ? `${Math.max(2, Math.round(item.count / maximum * 100))}%` : '0%' }} /></span>
+            <span>{summaryValue(item.key, item.count)}</span>
+          </li>)}</ul>
+          <p className="summary-note summary-footnote">记录数量仅供了解采集情况，不代表工作量或成果质量。</p>
         </section>
       </div>
-    </article>)}</div>
+    </article>; })}</div>
   </div>;
 }
 

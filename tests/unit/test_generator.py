@@ -41,6 +41,10 @@ def test_summary_preserves_zero_vs_unknown_and_date(records):
     assert "协作沟通：0 条" in report.markdown
     assert "已完成任务：0 条" not in report.markdown
     assert "获取失败，数量未知" in report.html
+    assert "已获取记录合计：1 条" in report.markdown
+    assert "有记录类别：1 项" in report.markdown
+    assert "1 类来源获取失败，未计入合计" in report.markdown
+    assert "已获取记录合计：1 条" in report.html
 
 
 def test_email_has_clear_overview_and_china_generation_time_without_record_metadata(records):
@@ -49,9 +53,19 @@ def test_email_has_clear_overview_and_china_generation_time_without_record_metad
     assert 'width="860"' in report.html and 'max-width:860px' in report.html
     assert "今日概览" in report.html
     assert "生成时间：2026-09-25 18:00:00（中国标准时间，UTC+08:00）" in report.html
-    assert report.html.count("1 条") == 3
+    assert "已获取记录合计：3 条" in report.html
+    assert "有记录类别：3 项" in report.html
+    assert "记录数量对比" in report.html
     assert all(value not in report.html for value in ("fix bug", "Ship", "日报完成", "acme/repo",
                                                       "href=", "个文件"))
+
+
+def test_empty_successful_sources_do_not_imply_completed_work():
+    report = make_report([MemberReport("u1", "张三")])
+    for output in (report.markdown, report.html):
+        assert "已获取记录合计：0 条" in output
+        assert "有记录类别：0 项" in output
+        assert "不代表工作量或成果质量" in output
 
 
 def test_multi_member_identity_is_safe_but_single_member_is_not_repeated(records):
